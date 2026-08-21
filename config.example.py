@@ -3,7 +3,12 @@
 config.py 已在 .gitignore 中，不会被提交。
 """
 import os
+import ssl
 
+import httpx
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 from llama_index.embeddings.openai import OpenAIEmbedding
 from qdrant_client import QdrantClient
 
@@ -12,6 +17,29 @@ DEEPSEEK_KEY = "sk-your-deepseek-key"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 
 GJ_KEY = "sk-your-siliconflow-key"
+
+
+# ---- TLS 1.2 强制降级（共用）----
+# api.siliconflow.cn 线路在 TLS1.3 下有 BAD_RECORD_MAC 抖动，两条调用栈统一在这里降级
+def _tls12_httpx_client() -> httpx.Client:
+    """构造强制 TLS 1.2 的 httpx 客户端。"""
+    ctx = ssl.create_default_context()
+    ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    return httpx.Client(verify=ctx)
+
+
+class TLS12Adapter(HTTPAdapter):
+    """限制 TLS 最高版本到 1.2 的 requests 适配器。"""
+
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+
+tls12_session = requests.Session()
+tls12_session.mount("https://", TLS12Adapter())
 
 # ---- 嵌入模型（SiliconFlow 托管 BGE）----
 embed_model = OpenAIEmbedding(
@@ -28,6 +56,7 @@ RERANK_MAX_RETRIES = 3
 # ---- 数据文件 ----
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CATEGORY_FILE = os.path.join(_BASE_DIR, "data", "通用类目.csv")
+THIRD_CATEGORY_FILE = os.path.join(_BASE_DIR, "data", "第三方类目.csv")
 
 # ---- Qdrant 连接 ----
 COLLECTION_NAME = "总部商品"

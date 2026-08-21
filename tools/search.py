@@ -2,11 +2,13 @@
 向量搜索工具：自然语言 → 向量检索 → 重排 → 返回结果
 """
 import time
+
 import requests
 
 from config import (
     embed_model, qdrant_client, COLLECTION_NAME,
     GJ_KEY, RERANK_MODEL, RERANK_API_URL, RERANK_MAX_RETRIES,
+    tls12_session as _session,
 )
 
 
@@ -15,7 +17,7 @@ def _rerank(query: str, documents: list[str], limit: int) -> list[dict]:
     last_error = None
     for attempt in range(RERANK_MAX_RETRIES + 1):
         try:
-            resp = requests.post(
+            resp = _session.post(
                 RERANK_API_URL,
                 headers={
                     "Authorization": f"Bearer {GJ_KEY}",

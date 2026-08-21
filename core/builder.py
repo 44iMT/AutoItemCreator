@@ -2,6 +2,9 @@
 向量索引构建器：读取 Excel → 清洗 → 向量化 → 存入 Qdrant
 
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 from config import embed_model, qdrant_client, COLLECTION_NAME, VECTOR_DIM
@@ -18,6 +21,7 @@ HQ_FIELDS_MAP = {
     "商品名称": "商品名称",
     "总部前台类目名称": "前台类目名称",
     "后台叶子类目名称": "后台类目名称",
+    "淘宝闪购渠道类目": "淘宝闪购渠道类目",
     "商品价格(元)": "商品价格",
     "售卖规格": "售卖规格",
     "商品重量": "商品重量",
@@ -29,12 +33,15 @@ HQ_FIELDS_MAP = {
 # 建库
 # ═══════════════════════════════════════════════════
 def build(excel_path: str):
-    # 1. 读 Excel + 清洗
-    df = pd.read_excel(excel_path)
+    # 1. 读 Excel + 清洗（dtype=str 防条码被读成浮点数，如 6901234567890.0）
+    df = pd.read_excel(excel_path, dtype=str)
     available = [k for k in HQ_FIELDS_MAP if k in df.columns]
     df = df[available].rename(columns=HQ_FIELDS_MAP)
-    df["商品条码"] = df["商品条码"].astype(str).str.strip()
-    df["商品编码"] = df["商品编码"].astype(str).str.strip()
+    df = df.where(pd.notnull(df), "")  # NaN → ""，避免脏 null 进 payload
+    for col in ("商品条码", "商品编码"):
+        df[col] = (
+            df[col].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
+        )
     print(f"[build] 读取 {excel_path}: {len(df)} 条, {len(available)} 字段")
 
     # 2. 重建集合
