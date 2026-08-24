@@ -1,16 +1,13 @@
 """
 网页搜索工具：通过 DeepSeek 内置联网搜索获取信息
 """
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from config import DEEPSEEK_KEY, DEEPSEEK_BASE_URL
+from openai import OpenAI
 
-_search_llm = ChatOpenAI(
-    model="deepseek-v4-flash",
+
+_client = OpenAI(
     api_key=DEEPSEEK_KEY,
-    base_url=DEEPSEEK_BASE_URL,
-    temperature=0,
-    extra_body={"enable_search": True},
+    base_url=DEEPSEEK_BASE_URL
 )
 
 
@@ -25,15 +22,16 @@ def web_search(query: str, max_results: int) -> str:
         max_results: 最多返回几条结果，推荐 3-5 条
     """
     print(f"[web_search] '{query}' max: {max_results}")
-    messages = [
-        SystemMessage(content=(
-            f"你是网页搜索助手。请搜索并总结与查询相关的最新信息。"
-            f"返回最多 {max_results} 条结果，每条包含标题和摘要。"
-            f"用纯文本格式，不要用 markdown。"
-        )),
-        HumanMessage(content=query),
-    ]
-    response = _search_llm.invoke(messages)
-    content = response.content
+    response = _client.responses.create(
+        model="deepseek-v4-flash",
+        input=f"你是网页搜索助手。请搜索并总结与查询相关的最新信息。"
+              f"返回最多 {max_results} 条结果，每条包含标题和摘要。"
+              f"用户查询：{query}",
+        tools=[{"type": "web_search"}],
+        extra_body={
+            "search_context_size": "high"  # 可选，控制搜索上下文
+        }
+    )
+    content = response.output_text
     print(f"[web_search] '{query}' → 完成")
     return content
