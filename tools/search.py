@@ -3,12 +3,12 @@
 """
 import time
 
-import requests
+import httpx
 
 from config import (
     embed_model, qdrant_client, COLLECTION_NAME,
     GJ_KEY, RERANK_MODEL, RERANK_API_URL, RERANK_MAX_RETRIES,
-    tls12_session as _session,
+    tls12_client,
 )
 
 
@@ -17,7 +17,7 @@ def _rerank(query: str, documents: list[str], limit: int) -> list[dict]:
     last_error = None
     for attempt in range(RERANK_MAX_RETRIES + 1):
         try:
-            resp = _session.post(
+            resp = tls12_client.post(
                 RERANK_API_URL,
                 headers={
                     "Authorization": f"Bearer {GJ_KEY}",
@@ -33,15 +33,12 @@ def _rerank(query: str, documents: list[str], limit: int) -> list[dict]:
             )
             resp.raise_for_status()
             return resp.json().get("results", [])
-        except requests.exceptions.SSLError as e:
+        except httpx.TransportError as e:
+            # SSL/连接/超时等传输层错误（含 TLS1.3 抖动）都值得退避重试
             last_error = e
             if attempt < RERANK_MAX_RETRIES:
                 time.sleep(2 ** attempt)
-        except requests.exceptions.Timeout:
-            last_error = None
-            if attempt < RERANK_MAX_RETRIES:
-                time.sleep(2)
-        except requests.exceptions.RequestException:
+        except httpx.HTTPStatusError:
             last_error = None
             if attempt < RERANK_MAX_RETRIES:
                 time.sleep(2)

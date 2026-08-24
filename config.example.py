@@ -6,9 +6,6 @@ import os
 import ssl
 
 import httpx
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.ssl_ import create_urllib3_context
 from llama_index.embeddings.openai import OpenAIEmbedding
 from qdrant_client import QdrantClient
 
@@ -20,7 +17,8 @@ GJ_KEY = "sk-your-siliconflow-key"
 
 
 # ---- TLS 1.2 强制降级（共用）----
-# api.siliconflow.cn 线路在 TLS1.3 下有 BAD_RECORD_MAC 抖动，两条调用栈统一在这里降级
+# api.siliconflow.cn 线路在 TLS1.3 下有 BAD_RECORD_MAC 抖动，统一用一个 httpx 客户端降级：
+# 嵌入模型（OpenAIEmbedding）与重排接口（tools/search.py）共用
 def _tls12_httpx_client() -> httpx.Client:
     """构造强制 TLS 1.2 的 httpx 客户端。"""
     ctx = ssl.create_default_context()
@@ -28,18 +26,7 @@ def _tls12_httpx_client() -> httpx.Client:
     return httpx.Client(verify=ctx)
 
 
-class TLS12Adapter(HTTPAdapter):
-    """限制 TLS 最高版本到 1.2 的 requests 适配器。"""
-
-    def init_poolmanager(self, *args, **kwargs):
-        ctx = create_urllib3_context()
-        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
-        kwargs["ssl_context"] = ctx
-        return super().init_poolmanager(*args, **kwargs)
-
-
-tls12_session = requests.Session()
-tls12_session.mount("https://", TLS12Adapter())
+tls12_client = _tls12_httpx_client()
 
 # ---- 嵌入模型（SiliconFlow 托管 BGE）----
 embed_model = OpenAIEmbedding(
