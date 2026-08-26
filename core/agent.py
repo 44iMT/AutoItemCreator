@@ -21,6 +21,7 @@ from langchain_openai import ChatOpenAI
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import DEEPSEEK_KEY, DEEPSEEK_BASE_URL
+from core.reuse import ReuseCache
 
 DEFAULT_MODEL = "deepseek-v4-flash"
 DEFAULT_CONCURRENCY = 4
@@ -96,6 +97,7 @@ def run_excel_task(
     display_out_key: str = None,
     log_tag: str = "agent",
     callback=None,
+    reuse: dict = None,
 ):
     """
     读 Excel → 并发调 agent → 提取 JSON → 按原序写回 Excel。
@@ -109,7 +111,14 @@ def run_excel_task(
     display_key    : 进度日志里显示的输入字段（默认取 columns_map 第一个值）
     display_out_key: 进度日志里显示的结果字段（默认取 out_columns 第一个键）
     callback       : 每行成功后的回调 (i, fields, out) -> None，可做额外打印
+    reuse          : 结果复用缓存配置，None=不启用。键：
+                     collection       缓存 collection 名；大改 prompt/类目表就换名（版本即名字）
+                     exact_fields     精确键列名列表（如商品编码），不给 = 精确层关闭
+                     vector_fields    向量检索列名列表（按序拼接成单文本），不给 = 向量层关闭
+                     vector_threshold 向量复用阈值，开了 vector_fields 必填（无默认值）
+                     rebuild          True=启动时删库重建，默认 False
     """
+    cache = ReuseCache(reuse) if reuse else None
     rows = pd.read_excel(input_file, dtype=str).to_dict("records")
     print(f"[{log_tag}] 读取 '{input_file}'，{len(rows)} 行，并发={concurrency}")
 
@@ -118,6 +127,18 @@ def run_excel_task(
     display_key = display_key or next(iter(columns_map.values()))  # 默认第一个展示名
     display_out_key = display_out_key or out_keys[0]
     display_key = display_key if display_key in columns_map.values() else next(iter(columns_map.values()))
+
+    def merge_out(out, fields, row):
+        """结果字段合并：LLM 漏回显输入字段 → 回退原值，避免被空串覆盖。"""
+        merged = {**fields}
+        for k in out_keys:
+            v = out.get(k)
+            if v in (None, ""):
+                # 漏回显的输入字段（columns_map 值与输出键同名时）用原值兜底
+                origin = columns_map.get(k)
+                v = row.get(origin, "") if origin else ""
+            merged[k] = v if v is not None else ""
+        return merged
 
     def process_one(i, row):
         # fields 以展示名（columns_map 的值）为键，与输出表头/日志字段一致
@@ -134,6 +155,21 @@ def run_excel_task(
 只输出JSON，不要markdown包裹：
 {json_template}
 """
+        # 结果复用：先查历史结果，命中即当 out，跳过 Agent（断点续跑也靠它）
+        if cache:
+            out, source = cache.lookup(row)
+            if out is not None:
+                merged = merge_out(out, fields, row)
+                merged["_idx"] = i
+                merged["_src"] = source
+                print(
+                    f"[{log_tag}] [{i + 1}/{len(rows)}] "
+                    f"{fields.get(display_key, '?')} → {merged.get(display_out_key, '?')} [{source}]"
+                )
+                if callback:
+                    callback(i, fields, out)
+                return merged
+
         last_err = None
         for attempt in (range(retry_times)):
             try:
@@ -142,17 +178,12 @@ def run_excel_task(
                     {"configurable": {"thread_id": f"item-{i + 1}"}},
                 )
                 out = extract_json(result["messages"][-1].content)
+                if cache:
+                    cache.store(row, out)  # 只存 LLM 原始 out；逐行即写，崩了也保住已完成的
 
-                # 结果字段合并：LLM 漏回显输入字段 → 回退原值，避免被空串覆盖
-                merged = {**fields}
-                for k in out_keys:
-                    v = out.get(k)
-                    if v in (None, ""):
-                        # 漏回显的输入字段（columns_map 值与输出键同名时）用原值兜底
-                        origin = columns_map.get(k)
-                        v = row.get(origin, "") if origin else ""
-                    merged[k] = v if v is not None else ""
+                merged = merge_out(out, fields, row)
                 merged["_idx"] = i
+                merged["_src"] = "Agent"
 
                 print(
                     f"[{log_tag}] [{i + 1}/{len(rows)}] "
@@ -175,6 +206,7 @@ def run_excel_task(
         for k in out_keys:
             failed[k] = ""
         failed["_idx"] = i
+        failed["_src"] = "失败"
         return failed
 
     # 并发执行
@@ -183,6 +215,14 @@ def run_excel_task(
         futures = {pool.submit(process_one, i, row): i for i, row in enumerate(rows)}
         for f in as_completed(futures):
             results.append(f.result())
+
+    # 来源统计：缓存层的命中分布；不开缓存时也报（Agent 与失败行数总有意义）
+    stats = {"精确缓存": 0, "向量缓存": 0, "Agent": 0, "失败": 0}
+    for r in results:
+        src = r.get("_src", "Agent")
+        stats["向量缓存" if src.startswith("向量缓存") else src] += 1
+    parts = [f"{k} {v}" for k, v in stats.items() if cache or k in ("Agent", "失败")]
+    print(f"[{log_tag}] 来源统计: " + " | ".join(parts))
 
     # 按原始顺序排列
     results.sort(key=lambda r: r["_idx"])

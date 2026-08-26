@@ -20,6 +20,14 @@ OUT_COLUMNS = {
     "类目建议": "建议增添的前台类目名称",
 }
 
+REUSE = {
+    "collection": "recategory_cache",     # 大改 prompt/类目表就换名（版本即名字）
+    "exact_fields": ["商品编码"],          # 断点续跑 / 同品复用
+    "vector_fields": ["商品名称"],         # 跨批次相似商品复用
+    "vector_threshold": 0.95,
+    # "rebuild": True,                    # 调阈值试跑时才开，会清空全部历史
+}
+
 agent = build_agent(
     [search_products, search_by_barcode, web_search],
     system_prompt=f"""
@@ -51,4 +59,5 @@ run_excel_task(
     display_key="商品名称",
     display_out_key="类目建议",
     log_tag="ReCategory",
+    reuse=REUSE,
 )

@@ -11,6 +11,7 @@ requirements.txt     Python 依赖
 
 core/                基础设施包
   agent.py           Agent 底座：构建 agent + Excel 批量任务执行器
+  reuse.py           结果复用缓存：Qdrant 双模式（精确/向量）检索
   builder.py         总部商品入库：Excel → 向量嵌入 → Qdrant
 
 tasks/
@@ -53,6 +54,7 @@ run_excel_task(
     include_input=False,         # False=只输出结果列；True=原始列+结果列
     display_key="商品名称",      # 进度日志显示字段
     log_tag="category",
+    reuse=REUSE,                 # 结果复用缓存，None=不启用（见下节）
 )
 ```
 
@@ -64,6 +66,38 @@ run_excel_task(
 - LLM 漏回显输入字段时回退原值，不被空串覆盖
 - JSON 提取兜底：花括号截取、中文引号、尾逗号、markdown 包裹
 - 写表用 openpyxl 引擎，全空结果行不会被吞掉
+
+## 结果复用缓存
+
+`reuse` 参数开启：跑过的行不再调 Agent，直接复用历史结果。三层瀑布——
+精确缓存命中 → 向量缓存命中 → Agent（跑完入缓存）。全 Qdrant 单存储，
+一个条目一个 point（payload 存键字段+out，向量存 vector_fields 拼接文本的 BGE 嵌入）。
+
+```python
+REUSE = {
+    "collection": "recategory_cache",  # 缓存 collection 名；大改 prompt/类目表就换名（版本即名字）
+    "exact_fields": ["商品编码"],       # 精确键；不给 = 精确层关闭
+    "vector_fields": ["商品名称"],      # 拼接成单文本嵌向量；不给 = 向量层关闭
+    "vector_threshold": 0.95,          # 开了 vector_fields 必填，无默认值——阈值是业务决策
+    # "rebuild": True,                 # 启动时删库重建，默认 False
+}
+```
+
+两层职责不同：**精确层管断点续跑**（同一批数据重跑时认出"这行跑过"，
+key 只取行内容字段，绝不含行号/文件名），**向量层管跨批次复用**
+（下个月的新批里有这个月处理过的相似商品，嵌入相似度过阈值即复用）。
+
+行为规则：
+
+- 命中结果直接当 LLM 的 `out` 走后续 merge/写表，与 Agent 路径行为完全一致
+- 只有 Agent 真跑的行入缓存，缓存命中的行不回写（相似误判不固化成精确事实）
+- 失败行永不入缓存；逐行成功即写，跑到一半崩了重跑只补尾巴
+- 精确键过轻量清洗（strip + 去 Excel 浮点尾巴 `.0`，同 builder.py）；任一键为空的行跳过精确层
+- 查/存双向 best-effort：缓存故障只降级为走 Agent，不拖死批处理
+- 进度日志标注来源 `[精确缓存]` / `[向量缓存 0.97]`，收尾报各层命中数
+
+向量层注意：同名不同规格的商品相似度可能很高，`vector_fields` 建议控制在
+1-2 个（商品名称+规格顶天）；阈值定多少，跑一批看 `[向量缓存 分数]` 的分布再校。
 
 ## 技术栈
 
@@ -196,13 +230,17 @@ OUT_COLUMNS = {
 ## 架构
 
 每个商品独立 Agent 对话（独立 thread_id），多线程并发执行，上下文不膨胀。
+开启 `reuse` 时每行先查结果复用缓存，命中即出、未命中走 Agent 并入缓存。
 
 ```
-pandas 读 Excel → 每行一个 Agent 调  → 收集结果 → pandas 写 Excel
-                    ├ 条码搜索
-                    ├ 向量搜索
-                    ├ 联网搜索
-                    └ 类目查询
+pandas 读 Excel → 每行先查复用缓存 ──命中──→ 直接出结果
+                     │ 未命中                     ↑
+                     ↓                           │ 成功后入缓存（逐行即写）
+                   每行一个 Agent 调 ─────────────┘
+                     ├ 条码搜索
+                     ├ 向量搜索
+                     ├ 联网搜索
+                     └ 类目查询
 ```
 
 ## 架构决策
