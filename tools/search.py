@@ -7,7 +7,7 @@ import httpx
 
 from config import (
     embed_model, qdrant_client, COLLECTION_NAME,
-    GJ_KEY, RERANK_MODEL, RERANK_API_URL, RERANK_MAX_RETRIES,
+    SILICONFLOW_KEY, RERANK_MODEL, RERANK_API_URL, RERANK_MAX_RETRIES,
     tls12_client,
 )
 
@@ -20,7 +20,7 @@ def _rerank(query: str, documents: list[str], limit: int) -> list[dict]:
             resp = tls12_client.post(
                 RERANK_API_URL,
                 headers={
-                    "Authorization": f"Bearer {GJ_KEY}",
+                    "Authorization": f"Bearer {SILICONFLOW_KEY}",
                     "Content-Type": "application/json",
                 },
                 json={
@@ -74,20 +74,21 @@ def search_products(query: str, limit: int, recall: int, rerank: bool) -> str:
         print(f"[search] '{query}' 没找到匹配商品")
         return "没找到匹配商品"
 
-    # 2. 排序
+    # 2. 排序：能重排就重排，没结果（未启用/候选不足/重试全败）就向量排序兜底
+    sorted_results = []
+    score_label = "相似度"
     if rerank and len(results) > limit:
         candidate_names = [r.payload["商品名称"] for r in results]
-        sorted_results = _rerank(query, candidate_names, limit=limit)
-        score_label = "重排分"
-        if not sorted_results:
+        reranked = _rerank(query, candidate_names, limit=limit)
+        if reranked:
+            sorted_results = reranked
+            score_label = "重排分"
+        else:
             print(f"[search] 重排失败，回退到向量排序")
-            sorted_results = [{"index": i, "relevance_score": results[i].score}
-                              for i in range(min(limit, len(results)))]
-            score_label = "相似度"
-    else:
+
+    if not sorted_results:
         sorted_results = [{"index": i, "relevance_score": results[i].score}
                           for i in range(min(limit, len(results)))]
-        score_label = "相似度"
 
     # 3. 格式化输出
     lines = []

@@ -10,10 +10,9 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from qdrant_client import QdrantClient
 
 # ---- API Keys ----
+SILICONFLOW_KEY = "sk-your-siliconflow-key"
 DEEPSEEK_KEY = "sk-your-deepseek-key"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
-
-GJ_KEY = "sk-your-siliconflow-key"
 
 
 # ---- TLS 1.2 强制降级（共用）----
@@ -31,8 +30,9 @@ tls12_client = _tls12_httpx_client()
 # ---- 嵌入模型（SiliconFlow 托管 BGE）----
 embed_model = OpenAIEmbedding(
     model_name="BAAI/bge-large-zh-v1.5",
-    api_key=GJ_KEY,
+    api_key=SILICONFLOW_KEY,
     api_base="https://api.siliconflow.cn/v1",
+    http_client=_tls12_httpx_client(),
 )
 
 # ---- 重排模型 ----
