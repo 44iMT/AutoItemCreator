@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 72" role="img" aria-labelledby="title desc">
+  <title id="title">AutoItemCreator</title>
+  <desc id="desc">AutoItemCreator logo with a geometric A product symbol and automation sparkle.</desc>
+  <defs>
+    <linearGradient id="aicGradient" x1="9" y1="9" x2="57" y2="61" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF3D7F"/>
+      <stop offset="1" stop-color="#FF174D"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(9 8)">
+    <path d="M28 3 50 16v25L28 54 6 41V16L28 3Z" fill="none" stroke="url(#aicGradient)" stroke-width="6" stroke-linejoin="round"/>
+    <path d="m17 42 11-23 11 23M21 34h14" fill="none" stroke="url(#aicGradient)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M48 1v7M44.5 4.5h7" stroke="#FF7AA8" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+  <text x="76" y="45" fill="#F7F9FC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" font-weight="700" letter-spacing="-1">AutoItem<tspan fill="#FF477E">Creator</tspan></text>
+  <text x="326" y="27" fill="#8994A7" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="700" letter-spacing="1">AIC</text>
+</svg>

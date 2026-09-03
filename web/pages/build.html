@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>AutoItemCreator</title>
+<style>
+  /* ── 深色 token（Qdrant dashboard 深色模式风格）── */
+  :root {
+    --bg: #0f1117;          /* 页面底 */
+    --panel: #171a21;       /* 卡片/侧边栏 */
+    --panel-2: #1e222b;     /* 输入框/次级底 */
+    --border: #262b35;      /* 边框 */
+    --text: #e5e7eb;        /* 主文本 */
+    --text-dim: #8b93a1;    /* 次文本 */
+    --accent: #6e73f5;      /* 靛紫主色 */
+    --accent-hover: #7d82ff;
+    --green: #4ade80;       /* 状态/成功 */
+    --red: #f87171;
+    --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: var(--bg);
+         color: var(--text); height: 100vh; display: flex; overflow: hidden; }
+
+  /* ── 侧边栏 ── */
+  .sidebar { width: 240px; flex: none; background: var(--panel); border-right: 1px solid var(--border);
+             display: flex; flex-direction: column; padding: 14px 10px; }
+  .logo { padding: 4px 4px 16px; }
+  .logo img { width: 100%; display: block; border-radius: 8px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 8px;
+              font-size: 14px; color: var(--text-dim); cursor: default; user-select: none; }
+  .nav-item.active { background: #2a2e4a; color: var(--text); }
+  .nav-item.disabled { opacity: .45; }
+  .nav-item .ico { width: 16px; text-align: center; font-size: 13px; }
+  .sidebar .ver { margin-top: auto; padding: 10px 12px; font-size: 12px; color: var(--text-dim); opacity: .7; }
+
+  /* ── 主区（Qdrant 风：24px 舒适留白，内容不贴边）── */
+  .mainwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 24px 28px; gap: 14px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .status { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-dim); }
+  .status .dot.on { background: var(--green); }
+
+  .main { display: flex; gap: 12px; flex: 1; min-height: 0; }
+  .left { width: 300px; flex: none; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .drop { border: 2px dashed #3a4150; border-radius: 8px; padding: 26px 12px; text-align: center;
+          color: var(--text-dim); cursor: pointer; transition: .15s; font-size: 14px; }
+  .drop.hover { border-color: var(--accent); background: #1c2030; color: var(--text); }
+  .fileinfo { margin-top: 8px; font-size: 13px; color: var(--text-dim); }
+  .cols { flex: 1; overflow-y: auto; min-height: 0; }
+  .cols label { display: flex; align-items: center; gap: 7px; padding: 4px 6px;
+                border-radius: 6px; font-size: 14px; cursor: pointer; }
+  .cols label:hover { background: var(--panel-2); }
+  .cols .src { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .tag { font-size: 11px; padding: 0 6px; border-radius: 99px; flex: none; }
+  .tag.req { background: rgba(248,113,113,.15); color: var(--red); }
+  .tag.rec { background: rgba(251,191,36,.15); color: var(--amber); }
+
+  .right { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .mappanel { flex: none; max-height: 70%; display: flex; flex-direction: column; min-height: 0; }
+  .maps { flex: 1; overflow-y: auto; min-height: 0; }
+  table.mt { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .mt th { text-align: left; font-size: 12px; letter-spacing: .08em; color: var(--text);
+           font-weight: 600; padding: 4px 8px 8px; border-bottom: 1px solid var(--border); }
+  .mt td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .mt tr:last-child td { border-bottom: none; }
+  .mt .src { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mt input { width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+              font-size: 14px; background: var(--panel-2); color: var(--text); }
+  .mt input:focus { outline: none; border-color: var(--accent); }
+  .mt input.err { border-color: var(--red); background: rgba(248,113,113,.08); }
+  .warn { font-size: 13px; color: var(--amber); }
+  .err  { font-size: 13px; color: var(--red); }
+  .ok   { font-size: 13px; color: var(--green); }
+  .actions { display: flex; align-items: center; gap: 14px; }
+  button { padding: 9px 22px; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  #btnBuild { background: var(--accent); color: #fff; }
+  #btnBuild:hover:not(:disabled) { background: var(--accent-hover); }
+  #btnBuild:disabled { background: #3a4150; color: var(--text-dim); cursor: not-allowed; }
+  .hint { font-size: 13px; color: var(--text-dim); }
+  .danger { font-size: 13px; color: var(--red); }
+  .log:empty::before { content: "暂无日志，构建后此处实时显示"; color: #4a5261; }
+
+  .logpanel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .log { flex: 1; background: #12151c; border: 1px solid var(--border); color: #9ca8b8;
+         font: 12px/1.6 Consolas, "Courier New", monospace;
+         border-radius: 8px; padding: 10px 14px; overflow-y: auto; white-space: pre-wrap; }
+  .log .done { color: var(--green); } .log .fail { color: var(--red); }
+
+  /* ── 滚动条：Qdrant/MUI 风（窄 4px、透明轨道、圆角滑块，hover 提亮）── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a4150; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #4a5261; }
+  * { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
+  html { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">
+    <img src="/static/aic-home-logo.svg?v=2" alt="AutoItemCreator">
+  </div>
+  <div class="nav-item active"><span class="ico">▲</span>主档商品库构建</div>
+  <div class="ver">AutoItemCreator · v0.2</div>
+</nav>
+
+<div class="mainwrap">
+  <div class="topbar">
+    <h1>主档商品库构建</h1>
+    <span class="status" id="status"><span class="dot"></span>查询中…</span>
+  </div>
+
+  <div class="main">
+    <div class="left">
+      <div class="panel">
+        <div class="drop" id="drop">拖入 / 点击选择 xlsx</div>
+        <div class="fileinfo" id="fileinfo"></div>
+      </div>
+      <div class="panel" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+        <b style="font-size:13px; margin-bottom:6px; color:var(--text-dim);">列（勾选进库）</b>
+        <div class="cols" id="cols"></div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel mappanel">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <b style="font-size:14px;">字段映射 <span id="mapcount" style="color:var(--text-dim);font-weight:400;"></span></b>
+        </div>
+        <div class="maps" id="maps"></div>
+        <div id="msg" style="margin-top:8px;"></div>
+        <div class="actions" style="margin-top:10px;">
+          <button id="btnBuild" disabled>开始构建</button>
+          <span class="danger">⚠ 构建将清空旧库后重建</span>
+        </div>
+      </div>
+      <div class="panel logpanel">
+        <b style="font-size:13px; margin-bottom:6px; color:var(--text-dim);">日志</b>
+        <div class="log" id="log" style="flex:1;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<datalist id="stdnames"></datalist>
+
+<script>
+// 唯一真相源：{源表头: 映射名}。左勾选、右映射行都从它派生
+let state = { fileId: null, headers: [], required: [], recommended: [], map: {} };
+
+const $ = id => document.getElementById(id);
+
+function render() {
+  const cols = $("cols"); cols.innerHTML = "";
+  state.headers.forEach(h => {
+    const meta = state.headers_meta[h] || {};
+    const lab = document.createElement("label");
+    const cb = Object.assign(document.createElement("input"), { type: "checkbox" });
+    cb.checked = h in state.map;
+    cb.onchange = () => {
+      if (cb.checked) state.map[h] = meta.suggested || h;   // 未匹配的预填自身表头名
+      else delete state.map[h];
+      render();
+    };
+    lab.append(cb, Object.assign(document.createElement("span"), { className: "src", textContent: h, title: h }));
+    if (meta.suggested && state.required.includes(meta.suggested))
+      lab.append(Object.assign(document.createElement("span"), { className: "tag req", textContent: "必" }));
+    else if (meta.suggested && state.recommended.includes(meta.suggested))
+      lab.append(Object.assign(document.createElement("span"), { className: "tag rec", textContent: "荐" }));
+    cols.append(lab);
+  });
+
+  // 映射区：Qdrant 风格两列表格（原表头 → 标准名）
+  const maps = $("maps"); maps.innerHTML = "";
+  const tbl = document.createElement("table"); tbl.className = "mt";
+  const thead = document.createElement("tr");
+  ["原表头", "标准名"].forEach(t =>
+    thead.appendChild(Object.assign(document.createElement("th"), { textContent: t })));
+  const hwrap = document.createElement("thead"); hwrap.append(thead); tbl.append(hwrap);
+  const tbwrap = document.createElement("tbody");
+  const targets = [];
+  Object.entries(state.map).forEach(([src, name]) => {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td");
+    td1.append(Object.assign(document.createElement("span"), { className: "src", textContent: src, title: src }));
+    const td2 = document.createElement("td");
+    const inp = document.createElement("input");
+    inp.value = name;
+    inp.setAttribute("list", "stdnames");  // input.list 是只读 property，必须走 attribute
+    inp.oninput = () => { state.map[src] = inp.value; check(targets); };
+    td2.append(inp);
+    tr.append(td1, td2);
+    tbwrap.append(tr);
+    targets.push({ inp });
+  });
+  tbl.append(tbwrap);
+  maps.append(tbl);
+  $("mapcount").textContent = `(${Object.keys(state.map).length}/${state.headers.length})`;
+  check(targets);
+}
+
+function check(targets) {
+  const msg = $("msg"); msg.innerHTML = ""; const lines = [];
+  const names = Object.values(state.map).map(v => v.trim());
+  const dup = names.filter((n, i) => n && names.indexOf(n) !== i);
+  targets.forEach(t => t.inp.classList.toggle("err", !t.inp.value.trim() || dup.includes(t.inp.value.trim())));
+
+  const missReq = state.required.filter(r => !names.includes(r));
+  if (missReq.length) lines.push(`<div class="err">✗ 缺少必需字段: ${missReq.join("、")}</div>`);
+  const missRec = state.recommended.filter(r => !names.includes(r));
+  if (missRec.length) lines.push(`<div class="warn">⚠ 未映射建议字段: ${missRec.join("、")}（范本库将缺类目信息）</div>`);
+  if (dup.length) lines.push(`<div class="err">✗ 映射名重复: ${[...new Set(dup)].join("、")}</div>`);
+  if (!missReq.length && !dup.length && state.fileId)
+    lines.push('<div class="ok">✓ 可以构建</div>');
+  msg.innerHTML = lines.join("") || '<div class="hint">上传文件后自动匹配</div>';
+  $("btnBuild").disabled = !(state.fileId && !missReq.length && !dup.length && !running);
+}
+
+let running = false;
+
+// 库状态条：进页面拉一次，构建完成再拉一次
+async function refreshStatus() {
+  try {
+    const j = await (await fetch("/api/build/qdrant/status")).json();
+    $("status").innerHTML = j.exists
+      ? `<span class="dot on"></span>${j.collection} · ${j.points.toLocaleString()} 条`
+      : `<span class="dot"></span>${j.collection} · 未构建`;
+  } catch (e) { $("status").innerHTML = `<span class="dot"></span>Qdrant 连接失败`; }
+}
+
+$("btnBuild").onclick = async () => {
+  running = true; check([]);
+  $("btnBuild").disabled = true; $("log").innerHTML = "";
+  try {
+    const r = await fetch("/api/build/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_id: state.fileId, fields_map: state.map }),
+    });
+    const j = await r.json();
+    if (!r.ok) { $("log").innerHTML = `<span class="fail">${j.detail || "构建请求被拒"}</span>`; running = false; check([]); return; }
+    const es = new EventSource(`/api/build/stream`);
+    es.onmessage = ev => {
+      const d = JSON.parse(ev.data);
+      if (d.done) { es.close(); running = false; check([]); refreshStatus(); return; }
+      const div = document.createElement("div");
+      if (/构建完成/.test(d.line)) div.className = "done";
+      if (/构建失败|错误|Error|Traceback/.test(d.line)) div.className = "fail";
+      div.textContent = d.line; $("log").append(div); $("log").scrollTop = 1e9;
+    };
+    es.onerror = () => { es.close(); running = false; check([]); };
+  } catch (e) { $("log").innerHTML = `<span class="fail">${e}</span>`; running = false; check([]); }
+};
+
+async function upload(file) {
+  const fd = new FormData(); fd.append("file", file);
+  $("fileinfo").textContent = "上传中…";
+  const r = await fetch("/api/build/upload", { method: "POST", body: fd });
+  const j = await r.json();
+  if (!r.ok) { $("fileinfo").textContent = j.detail || "上传失败"; return; }
+  state.fileId = j.file_id;
+  state.headers = j.headers.map(h => h.name);
+  state.headers_meta = Object.fromEntries(j.headers.map(h => [h.name, h]));
+  state.required = j.required; state.recommended = j.recommended;
+  $("stdnames").innerHTML = j.standard_names.map(n => `<option value="${n}">`).join("");
+  state.map = Object.fromEntries(j.headers.filter(h => h.suggested).map(h => [h.name, h.suggested]));
+  $("fileinfo").textContent = `${j.filename} · ${j.rows} 行`;
+  render();
+}
+
+const drop = $("drop");
+drop.onclick = () => { const i = document.createElement("input"); i.type = "file";
+  i.accept = ".xlsx,.xls"; i.onchange = () => i.files[0] && upload(i.files[0]); i.click(); };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("hover"); };
+drop.ondragleave = () => drop.classList.remove("hover");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover");
+  const f = e.dataTransfer.files[0]; if (f) upload(f); };
+
+render();
+refreshStatus();
+</script>
+</body>
+</html>

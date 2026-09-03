@@ -5,6 +5,10 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import warnings
+# 商家导出 xlsx 无默认样式表，openpyxl 每读必警——纯噪音，压掉（子进程侧同 web/app.py）
+warnings.filterwarnings("ignore", message="Workbook contains no default style")
+
 import pandas as pd
 from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType
 from config import embed_model, qdrant_client, COLLECTION_NAME, VECTOR_DIM
@@ -32,17 +36,30 @@ HQ_FIELDS_MAP = {
 # ═══════════════════════════════════════════════════
 # 建库
 # ═══════════════════════════════════════════════════
-def build(excel_path: str):
+def build(excel_path: str, fields_map: dict):
+    """
+    读 Excel → 清洗 → 向量化 → 存入 Qdrant。
+
+    参数:
+        excel_path: 源数据文件
+        fields_map: {原表头: 标准字段名}，缺列直接报错；默认总部范本库的映射
+    """
     # 1. 读 Excel + 清洗（dtype=str 防条码被读成浮点数，如 6901234567890.0）
+    # 缺列直接报错（available 过滤会静默丢列：表头多个空格整个字段无声消失）
     df = pd.read_excel(excel_path, dtype=str)
-    available = [k for k in HQ_FIELDS_MAP if k in df.columns]
-    df = df[available].rename(columns=HQ_FIELDS_MAP)
+    try:
+        df = df[list(fields_map)].rename(columns=fields_map)
+    except KeyError as e:
+        missing = [k for k in fields_map if k not in df.columns]
+        raise ValueError(
+            f"表头缺少字段: {missing}\n实际列: {list(df.columns)}"
+        ) from e
     df = df.where(pd.notnull(df), "")  # NaN → ""，避免脏 null 进 payload
     for col in ("商品条码", "商品编码"):
         df[col] = (
             df[col].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
         )
-    print(f"[build] 读取 {excel_path}: {len(df)} 条, {len(available)} 字段")
+    print(f"[build] 读取 {excel_path}: {len(df)} 条, {len(df.columns)} 字段")
 
     # 2. 重建集合
     if qdrant_client.collection_exists(COLLECTION_NAME):
@@ -76,5 +93,23 @@ def build(excel_path: str):
     print(f"[build] 完成，共 {len(df)} 条\n")
 
 # ═══════════════════════════════════════════════════
+# CLI 入口：python core/builder.py [--excel ...] [--fields-json ...] [--rebuild]
+# 默认值即上方 PATH + HQ_FIELDS_MAP，终端裸跑行为不变；
+# 网页/外部调用走 --fields-json 传映射文件（中文映射走 argv 容易踩引号编码坑）
+# ═══════════════════════════════════════════════════
 if __name__ == "__main__":
-    build(PATH)
+    import argparse
+    import json as _json
+
+    parser = argparse.ArgumentParser(description="构建商品向量库")
+    parser.add_argument("--excel", default=PATH, help="源数据文件路径")
+    parser.add_argument("--fields-json", default=None,
+                        help="字段映射 {原表头: 标准名} 的 json 文件路径，不给则用 HQ_FIELDS_MAP")
+    args = parser.parse_args()
+
+    fields_map = (
+        _json.load(open(args.fields_json, encoding="utf-8"))
+        if args.fields_json
+        else HQ_FIELDS_MAP
+    )
+    build(args.excel, fields_map=fields_map)

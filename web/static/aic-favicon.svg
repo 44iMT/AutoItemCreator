@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 6 52 52" role="img" aria-labelledby="title desc">
+  <title id="title">AutoItemCreator web icon</title>
+  <desc id="desc">A geometric product box forming the letter A, with an automation sparkle.</desc>
+  <defs>
+    <linearGradient id="aicGradient" x1="12" y1="10" x2="51" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF3D7F"/>
+      <stop offset="1" stop-color="#FF174D"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 10 51 21v22L32 54 13 43V21L32 10Z" fill="none" stroke="url(#aicGradient)" stroke-width="6" stroke-linejoin="round"/>
+  <path d="m22 42 10-20 10 20M26 34h12" fill="none" stroke="url(#aicGradient)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M48 8.5v7M44.5 12h7" stroke="#FF7AA8" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

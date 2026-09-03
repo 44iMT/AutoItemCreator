@@ -1,0 +1,4 @@
+# 运行时临时文件：用户上传的 xlsx 副本与字段映射 json（含真实商品数据，绝不入库）
+uploads/*
+!uploads/.gitkeep
+__pycache__/
