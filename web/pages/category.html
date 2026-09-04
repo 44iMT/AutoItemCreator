@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>AutoItemCreator</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a21; --panel-2: #1e222b; --border: #262b35;
+    --text: #e5e7eb; --text-dim: #8b93a1; --accent: #6e73f5; --accent-hover: #7d82ff;
+    --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: var(--bg);
+         color: var(--text); height: 100vh; display: flex; overflow: hidden; }
+  .sidebar { width: 240px; flex: none; background: var(--panel); border-right: 1px solid var(--border);
+             display: flex; flex-direction: column; padding: 14px 10px; }
+  .logo { padding: 4px 4px 16px; }
+  .logo img { width: 100%; display: block; border-radius: 8px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 8px;
+              font-size: 14px; color: var(--text-dim); cursor: pointer; user-select: none; text-decoration: none; }
+  .nav-item:hover { background: var(--panel-2); color: var(--text); }
+  .nav-item.active { background: #2a2e4a; color: var(--text); }
+  .nav-item .ico { width: 16px; text-align: center; font-size: 13px; }
+  .sidebar .ver { margin-top: auto; padding: 10px 12px; font-size: 12px; color: var(--text-dim); opacity: .7; }
+
+  .mainwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 24px 28px; gap: 14px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+
+  .main { display: flex; gap: 12px; flex: 1; min-height: 0; }
+  .left { width: 320px; flex: none; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .drop { border: 2px dashed #3a4150; border-radius: 8px; padding: 22px 12px; text-align: center;
+          color: var(--text-dim); cursor: pointer; transition: .15s; font-size: 14px; }
+  .drop.hover { border-color: var(--accent); background: #1c2030; color: var(--text); }
+  .fileinfo { margin-top: 8px; font-size: 13px; color: var(--text-dim); }
+  .collist { flex: 1; overflow-y: auto; min-height: 0; }
+  .colrow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+            font-size: 14px; cursor: pointer; user-select: none; }
+  .colrow:hover { background: var(--panel-2); }
+  .colrow .ord { width: 22px; height: 22px; border-radius: 50%; flex: none; font-size: 12px;
+                 display: flex; align-items: center; justify-content: center; }
+  .colrow .ord.on { background: var(--accent); color: #fff; }
+  .colrow .ord.off { border: 1px dashed #3a4150; color: var(--text-dim); }
+  .colrow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .collist .tip { font-size: 12px; color: var(--text-dim); padding: 4px 8px; }
+
+  .right { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .cfg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .cfg label { font-size: 12px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+  .cfg input, .cfg select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+        font-size: 14px; background: var(--panel-2); color: var(--text); }
+  .cfg input:focus, .cfg select:focus { outline: none; border-color: var(--accent); }
+  .previewbox { flex: 1; overflow-y: auto; min-height: 120px; background: #12151c; border: 1px solid var(--border);
+                border-radius: 8px; padding: 10px 14px; font: 12px/1.7 Consolas, monospace; color: #9ca8b8;
+                white-space: pre; }
+  .stats { font-size: 13px; color: var(--text-dim); display: flex; gap: 14px; flex-wrap: wrap; }
+  .stats b { color: var(--text); font-weight: 600; }
+  .actions { display: flex; align-items: center; gap: 14px; }
+  button { padding: 8px 20px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  #btnSave { background: var(--accent); color: #fff; }
+  #btnSave:hover:not(:disabled) { background: var(--accent-hover); }
+  #btnSave:disabled, #btnPreview:disabled { background: #3a4150; color: var(--text-dim); cursor: not-allowed; }
+  #btnPreview { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .msg { font-size: 13px; }
+
+  .filetable { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .filetable th { text-align: left; font-size: 11px; letter-spacing: .08em; color: var(--text);
+                  font-weight: 600; padding: 4px 8px 6px; border-bottom: 1px solid var(--border); }
+  .filetable td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .filetable tr:last-child td { border-bottom: none; }
+  .badge { font-size: 11px; padding: 1px 8px; border-radius: 99px; }
+  .badge.on { background: rgba(74,222,128,.15); color: var(--green); }
+  .del { color: var(--red); cursor: pointer; font-size: 12px; user-select: none; }
+  .del.locked { color: var(--text-dim); cursor: not-allowed; opacity: .5; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a4150; border-radius: 2px; }
+  * { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo"><img src="/static/aic-home-logo.svg?v=2" alt="AutoItemCreator"></div>
+  <a class="nav-item" href="/"><span class="ico">▲</span>主档商品库构建</a>
+  <a class="nav-item active" href="/category"><span class="ico">◆</span>类目表转换</a>
+  <div class="ver">AutoItemCreator · v0.2</div>
+</nav>
+
+<div class="mainwrap">
+  <div class="topbar">
+    <h1>类目表转换</h1>
+    <span style="font-size:13px;color:var(--text-dim)">商家类目 xlsx → 单列 csv 白名单</span>
+  </div>
+
+  <div class="main">
+    <div class="left">
+      <div class="panel">
+        <div class="drop" id="drop">拖入 / 点击选择类目 xlsx</div>
+        <div class="fileinfo" id="fileinfo"></div>
+      </div>
+      <div class="panel" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+        <b style="font-size:13px; margin-bottom:4px; color:var(--text-dim);">列（按点击顺序 = 层级顺序）</b>
+        <div class="collist" id="collist"><div class="tip">上传后点击选择列，第 1 次点击 = 一级…</div></div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel">
+        <div class="cfg">
+          <label>分隔符<input id="sep" value=" > "></label>
+          <label>表头（首行）<input id="header" value="前台类目"></label>
+          <label>空值处理
+            <select id="skipmode">
+              <option value="skip">跳过空级别（缺二级=只留一级）</option>
+              <option value="strict">严格：每级都有值才保留</option>
+            </select>
+          </label>
+          <label>目标类型
+            <select id="ctype"><option value="third">三方类目</option><option value="general">通用类目</option></select>
+          </label>
+          <label>文件名<input id="fname" placeholder="如 三方类目902.csv" style="grid-column: span 2;"></label>
+        </div>
+        <div class="actions" style="margin-top:10px;">
+          <button id="btnPreview" disabled>预览转换</button>
+          <button id="btnSave" disabled>落盘保存</button>
+          <span class="msg" id="msg"></span>
+        </div>
+      </div>
+
+      <div class="panel" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+        <b style="font-size:13px; margin-bottom:6px; color:var(--text-dim);">预览</b>
+        <div class="previewbox" id="preview">先上传、选列，再点预览</div>
+        <div class="stats" id="stats" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="panel">
+        <b style="font-size:13px; color:var(--text-dim);">已有文件 <span id="ftype"></span></b>
+        <div id="filetable" style="margin-top:6px; max-height: 160px; overflow-y: auto;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let state = { fileId: null, headers: [], cols: [] };  // cols: 按点击顺序的列名
+
+function renderCols() {
+  const box = $("collist"); box.innerHTML = "";
+  state.headers.forEach(h => {
+    const idx = state.cols.indexOf(h);
+    const row = document.createElement("div"); row.className = "colrow";
+    const ord = document.createElement("span"); ord.className = "ord " + (idx >= 0 ? "on" : "off");
+    ord.textContent = idx >= 0 ? String(idx + 1) : "＋";
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = h; nm.title = h;
+    row.onclick = () => {
+      const i = state.cols.indexOf(h);
+      if (i >= 0) state.cols.splice(i, 1);       // 再点取消
+      else state.cols.push(h);
+      renderCols(); refreshBtns();
+    };
+    row.append(ord, nm); box.append(row);
+  });
+  if (!state.headers.length)
+    box.innerHTML = '<div class="tip">上传后点击选择列，第 1 次点击 = 一级…</div>';
+}
+
+function refreshBtns() {
+  $("btnPreview").disabled = $("btnSave").disabled = !(state.fileId && state.cols.length);
+}
+
+function reqBody() {
+  return {
+    file_id: state.fileId, cols: state.cols, sep: $("sep").value,
+    skip_empty: $("skipmode").value === "skip",
+    category_type: $("ctype").value, filename: $("fname").value.trim(),
+    header: $("header").value.trim() || "前台类目",
+  };
+}
+
+$("btnPreview").onclick = async () => {
+  $("msg").textContent = "";
+  const r = await fetch("/api/category/preview", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(reqBody()),
+  });
+  const j = await r.json();
+  if (!r.ok) { $("msg").innerHTML = `<span style="color:var(--red)">${j.detail}</span>`; return; }
+  $("preview").textContent = j.preview_lines.join("\n") + (j.out_rows > 20 ? `\n… 共 ${j.out_rows} 行` : "");
+  const s = j.stats;
+  $("stats").innerHTML = `输出 <b>${j.out_rows}</b> 行 <span>·</span> 源 ${j.total_rows} 行 <span>·</span> 空行丢弃 ${s["空行丢弃"]} <span>·</span> 空级别跳过 ${s["空级别跳过"]} <span>·</span> 重复去重 ${s["重复去重"]}`;
+  $("btnSave").disabled = false;
+};
+
+$("btnSave").onclick = async () => {
+  if (!$("fname").value.trim().endsWith(".csv")) { $("msg").innerHTML = '<span style="color:var(--red)">文件名要以 .csv 结尾</span>'; return; }
+  const r = await fetch("/api/category/save", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(reqBody()),
+  });
+  const j = await r.json();
+  if (!r.ok) { $("msg").innerHTML = `<span style="color:var(--red)">${j.detail}</span>`; return; }
+  const over = j.old_rows != null ? `（覆盖旧表 ${j.old_rows} 行）` : "";
+  $("msg").innerHTML = `<span style="color:var(--green)">✓ 已保存 ${j.rows} 行 ${over} → ${j.saved}</span>`;
+  loadFiles();
+};
+
+async function loadFiles() {
+  const t = $("ctype").value;
+  $("ftype").textContent = t === "third" ? "（data/third_category/）" : "（data/category/）";
+  const j = await (await fetch(`/api/category/files?category_type=${t}`)).json();
+  const box = $("filetable"); box.innerHTML = "";
+  if (!j.files.length) { box.innerHTML = '<div class="tip" style="font-size:12px;color:var(--text-dim)">目录为空</div>'; return; }
+  const tbl = document.createElement("table"); tbl.className = "filetable";
+  tbl.innerHTML = "<tr><th>名称</th><th>行数</th><th>生成时间</th><th></th><th></th></tr>";
+  j.files.forEach(f => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${f.name}</td><td>${f.rows}</td><td style="color:var(--text-dim)">${f.mtime}</td>
+      <td>${f.active ? '<span class="badge on">生效中</span>' : ""}</td>
+      <td class="del ${f.active ? "locked" : ""}" title="${f.active ? "生效中禁删" : "删除"}">${f.active ? "🔒" : "✕"}</td>`;
+    tr.querySelector(".del").onclick = async () => {
+      if (f.active) return;
+      if (!confirm(`删除 ${f.name}（${f.rows} 行）？`)) return;
+      const r = await fetch(`/api/category/files?category_type=${t}&name=${encodeURIComponent(f.name)}`, { method: "DELETE" });
+      const j = await r.json();
+      if (!r.ok) { alert(j.detail); return; }
+      loadFiles();
+    };
+    tbl.append(tr);
+  });
+  box.append(tbl);
+}
+$("ctype").onchange = loadFiles;
+
+async function upload(file) {
+  const fd = new FormData(); fd.append("file", file);
+  $("fileinfo").textContent = "上传中…";
+  const r = await fetch("/api/category/upload", { method: "POST", body: fd });
+  const j = await r.json();
+  if (!r.ok) { $("fileinfo").textContent = j.detail || "上传失败"; return; }
+  state.fileId = j.file_id; state.headers = j.headers; state.cols = [];
+  $("fileinfo").textContent = `${j.filename} · ${j.headers.length} 列`;
+  renderCols(); refreshBtns();
+}
+
+const drop = $("drop");
+drop.onclick = () => { const i = document.createElement("input"); i.type = "file";
+  i.accept = ".xlsx,.xls"; i.onchange = () => i.files[0] && upload(i.files[0]); i.click(); };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("hover"); };
+drop.ondragleave = () => drop.classList.remove("hover");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover");
+  const f = e.dataTransfer.files[0]; if (f) upload(f); };
+
+renderCols();
+loadFiles();
+</script>
+</body>
+</html>

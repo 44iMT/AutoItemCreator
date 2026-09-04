@@ -29,7 +29,8 @@
   .logo { padding: 4px 4px 16px; }
   .logo img { width: 100%; display: block; border-radius: 8px; }
   .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 8px;
-              font-size: 14px; color: var(--text-dim); cursor: default; user-select: none; }
+              font-size: 14px; color: var(--text-dim); cursor: pointer; user-select: none; text-decoration: none; }
+  .nav-item:hover { background: var(--panel-2); color: var(--text); }
   .nav-item.active { background: #2a2e4a; color: var(--text); }
   .nav-item.disabled { opacity: .45; }
   .nav-item .ico { width: 16px; text-align: center; font-size: 13px; }
@@ -106,6 +107,7 @@
     <img src="/static/aic-home-logo.svg?v=2" alt="AutoItemCreator">
   </div>
   <div class="nav-item active"><span class="ico">▲</span>主档商品库构建</div>
+  <a class="nav-item" href="/category"><span class="ico">◆</span>类目表转换</a>
   <div class="ver">AutoItemCreator · v0.2</div>
 </nav>
 
@@ -233,6 +235,20 @@ async function refreshStatus() {
   } catch (e) { $("status").innerHTML = `<span class="dot"></span>Qdrant 连接失败`; }
 }
 
+// SSE 接线：开始构建 / 刷新恢复 共用一份
+function attachStream() {
+  const es = new EventSource(`/api/build/stream`);
+  es.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    if (d.done) { es.close(); running = false; check([]); refreshStatus(); return; }
+    const div = document.createElement("div");
+    if (/构建完成/.test(d.line)) div.className = "done";
+    if (/构建失败|错误|Error|Traceback/.test(d.line)) div.className = "fail";
+    div.textContent = d.line; $("log").append(div); $("log").scrollTop = 1e9;
+  };
+  es.onerror = () => { es.close(); running = false; check([]); };
+}
+
 $("btnBuild").onclick = async () => {
   running = true; check([]);
   $("btnBuild").disabled = true; $("log").innerHTML = "";
@@ -243,16 +259,7 @@ $("btnBuild").onclick = async () => {
     });
     const j = await r.json();
     if (!r.ok) { $("log").innerHTML = `<span class="fail">${j.detail || "构建请求被拒"}</span>`; running = false; check([]); return; }
-    const es = new EventSource(`/api/build/stream`);
-    es.onmessage = ev => {
-      const d = JSON.parse(ev.data);
-      if (d.done) { es.close(); running = false; check([]); refreshStatus(); return; }
-      const div = document.createElement("div");
-      if (/构建完成/.test(d.line)) div.className = "done";
-      if (/构建失败|错误|Error|Traceback/.test(d.line)) div.className = "fail";
-      div.textContent = d.line; $("log").append(div); $("log").scrollTop = 1e9;
-    };
-    es.onerror = () => { es.close(); running = false; check([]); };
+    attachStream();
   } catch (e) { $("log").innerHTML = `<span class="fail">${e}</span>`; running = false; check([]); }
 };
 
@@ -282,6 +289,22 @@ drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover");
 
 render();
 refreshStatus();
+
+// 刷新恢复：页面加载时探测是否有构建在跑——有则接上日志流（服务端 lines 全量回放），
+// 按钮保持禁用，构建完成后自动解锁。重启 uvicorn 的场景不在恢复范围（lines 已清）
+(async () => {
+  try {
+    const j = await (await fetch("/api/build/status")).json();
+    if (j.running) {
+      running = true; check([]);
+      $("log").innerHTML = "";
+      const tip = document.createElement("div");
+      tip.textContent = "[web] 检测到进行中的构建，已重新接入日志（此前输出全量回放）";
+      $("log").append(tip);
+      attachStream();
+    }
+  } catch (e) { /* 状态接口失败不阻塞页面 */ }
+})();
 </script>
 </body>
 </html>

@@ -40,10 +40,10 @@ RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
 RERANK_API_URL = "https://api.siliconflow.cn/v1/rerank"
 RERANK_MAX_RETRIES = 3
 
-# ---- 数据文件 ----
+# ---- 数据文件（web 类目页管理，目录即类型：category/通用、third_category/三方）----
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CATEGORY_FILE = os.path.join(_BASE_DIR, "data", "通用类目.csv")
-THIRD_CATEGORY_FILE = os.path.join(_BASE_DIR, "data", "第三方类目.csv")
+CATEGORY_FILE = os.path.join(_BASE_DIR, "data", "category", "通用类目.csv")
+THIRD_CATEGORY_FILE = os.path.join(_BASE_DIR, "data", "third_category", "第三方类目.csv")
 
 # ---- Qdrant 连接 ----
 COLLECTION_NAME = "总部商品"

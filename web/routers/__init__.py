@@ -1,1 +1,1 @@
-from . import build  # noqa: F401
+from . import build, category  # noqa: F401

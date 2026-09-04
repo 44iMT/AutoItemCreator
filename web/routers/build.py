@@ -24,7 +24,9 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 UPLOAD_DIR = ROOT / "web" / "uploads"
 
 sys.path.insert(0, str(ROOT))  # 复用 builder 的映射表与清洗常量
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # web/（common 在这）
 from core.builder import HQ_FIELDS_MAP
+from web.common import _norm
 
 # 必需：builder 清洗/嵌入的硬依赖；建议：撑下游 recategory 的范本质量
 REQUIRED = ["商品编码", "商品条码", "商品名称"]
@@ -35,13 +37,8 @@ pages = APIRouter()  # 页面路由不带前缀（前缀会把 GET / 变成 /api
 
 
 # ═══════════════════════════════════════════════════
-# 工具：表头归一匹配
+# 工具：表头归一匹配（_norm 在 web/common.py 共享）
 # ═══════════════════════════════════════════════════
-def _norm(s: str) -> str:
-    """表头宽度归一：strip + 全角转半角括号（商品价格(元) vs （元））。"""
-    return s.strip().replace("（", "(").replace("）", ")")
-
-
 def match_headers(headers: list[str]) -> list[dict]:
     """原表头 → 自动匹配结果：suggested 非空=前端自动勾选并预填。"""
     # 归一后的默认映射键 → 标准名
@@ -164,6 +161,15 @@ def qdrant_status():
         return {"collection": COLLECTION_NAME, "exists": False, "points": 0}
     except Exception as e:  # Qdrant 没起：报给前端显示连接失败，不让页面等
         raise HTTPException(503, f"Qdrant 连不上: {e}")
+
+
+# ═══════════════════════════════════════════════════
+# 路由：任务状态（页面刷新后自动恢复日志流/按钮态用）
+# ═══════════════════════════════════════════════════
+@router.get("/status")
+def job_status():
+    return {"running": not (job["done"] or (job["proc"] and job["proc"].poll() is not None)),
+            "lines": len(job["lines"])}
 
 
 # ═══════════════════════════════════════════════════
