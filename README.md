@@ -20,6 +20,8 @@ config.example.py   配置模板（复制为 config.py 填入密钥；config.py 
 requirements.txt    Python 依赖
 
 desktop.py          桌面壳：起服务 → Edge --app 窗口（图标=favicon，几何居中）→ 心跳守护
+start.bat           安装自愈+启动：重建快捷方式并直接拉起应用（挪目录/换机后双击即可修复）
+create_shortcut.py  快捷方式生成器（COM 覆盖式重建桌面/项目双 lnk）
 AutoItemCreator.lnk 桌面快捷方式（直连 venv 的 pythonw，零控制台黑框）
 
 web/                Web 控制台（FastAPI，页面即领域）
@@ -75,6 +77,9 @@ python desktop.py        # 或双击桌面快捷方式
 
 跑批支持：预设一键满配 / 全参数手调（列映射、输出列、工具、注入、缓存）/
 中途停止 / 断点续跑 / 刷新自动恢复日志流。
+
+**首次使用 / 挪动目录 / 换机器**：双击 `start.bat`——自动重建快捷方式
+（路径自愈）并直接启动应用。
 
 ### 兜底：CLI 脚本
 
