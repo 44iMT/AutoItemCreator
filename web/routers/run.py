@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from web.common import _norm, CATEGORY_DIRS
+from web.common import _norm, CATEGORY_DIRS, render
 
 # 工具注册表（与 core/run_task.py 同源；agent 工具面 = 页面多选框选项）
 sys.path.insert(0, str(ROOT))
@@ -63,7 +63,7 @@ pages = APIRouter()
 # ═══════════════════════════════════════════════════
 @pages.get("/run", response_class=HTMLResponse)
 def index():
-    return (Path(__file__).parent.parent / "pages" / "run.html").read_text(encoding="utf-8")
+    return render("run.html", "run")
 
 
 # ═══════════════════════════════════════════════════

@@ -26,7 +26,7 @@ UPLOAD_DIR = ROOT / "web" / "uploads"
 sys.path.insert(0, str(ROOT))  # 复用 builder 的映射表与清洗常量
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # web/（common 在这）
 from core.builder import HQ_FIELDS_MAP
-from web.common import _norm
+from web.common import _norm, render
 
 # 必需：builder 清洗/嵌入的硬依赖；建议：撑下游 recategory 的范本质量
 REQUIRED = ["商品编码", "商品条码", "商品名称"]
@@ -53,9 +53,9 @@ def match_headers(headers: list[str]) -> list[dict]:
 # ═══════════════════════════════════════════════════
 # 路由：页面
 # ═══════════════════════════════════════════════════
-@pages.get("/", response_class=HTMLResponse)
+@pages.get("/build", response_class=HTMLResponse)
 def index():
-    return (Path(__file__).parent.parent / "pages" / "build.html").read_text(encoding="utf-8")
+    return render("build.html", "build")
 
 
 # ═══════════════════════════════════════════════════

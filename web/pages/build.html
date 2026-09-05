@@ -1,9 +1,6 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<title>AutoItemCreator</title>
+{% extends "base.html" %}
+{% block title %}AutoItemCreator{% endblock %}
+{% block css %}
 <style>
   /* ── 深色 token（Qdrant dashboard 深色模式风格）── */
   :root {
@@ -100,20 +97,9 @@
   * { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
   html { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
 </style>
-</head>
-<body>
-<nav class="sidebar">
-  <div class="logo">
-    <img src="/static/aic-home-logo.svg?v=2" alt="AutoItemCreator">
-  </div>
-  <div class="nav-item active"><span class="ico">▲</span>主档商品库构建</div>
-  <a class="nav-item" href="/category"><span class="ico">◆</span>类目表转换</a>
-  <a class="nav-item" href="/run"><span class="ico">▶</span>商品数据构建</a>
-  <div class="ver">AutoItemCreator · v0.2</div>
-</nav>
-
-<div class="mainwrap">
-  <div class="topbar">
+{% endblock %}
+{% block main %}
+<div class="topbar">
     <h1>主档商品库构建</h1>
     <span class="status" id="status"><span class="dot"></span>查询中…</span>
   </div>
@@ -151,7 +137,8 @@
 </div>
 
 <datalist id="stdnames"></datalist>
-
+{% endblock %}
+{% block script %}
 <script>
 // 唯一真相源：{源表头: 映射名}。左勾选、右映射行都从它派生
 let state = { fileId: null, headers: [], required: [], recommended: [], map: {} };
@@ -307,5 +294,4 @@ refreshStatus();
   } catch (e) { /* 状态接口失败不阻塞页面 */ }
 })();
 </script>
-</body>
-</html>
+{% endblock %}

@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from web.common import _norm, CATEGORY_DIRS
+from web.common import _norm, CATEGORY_DIRS, render
 
 # 文件名白名单：中文/字母/数字/下划线/连字符，禁路径分隔（防 ../ 逃逸）
 _SAFE_NAME = re.compile(r"^[\w一-鿿-]+\.csv$")
@@ -85,7 +85,7 @@ def _read_rows(path: Path) -> list[dict]:
 # ═══════════════════════════════════════════════════
 @pages.get("/category", response_class=HTMLResponse)
 def index():
-    return (Path(__file__).parent.parent / "pages" / "category.html").read_text(encoding="utf-8")
+    return render("category.html", "category")
 
 
 # ═══════════════════════════════════════════════════

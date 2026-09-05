@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}AutoItemCreator{% endblock %}
+{% block css %}
+<style>
+  .hero { padding: 18px 0 6px; }
+  .hero h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+  .hero p { margin-top: 8px; color: var(--text-dim); font-size: 14px; }
+
+  .flow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+          padding: 18px; display: flex; flex-direction: column; gap: 8px;
+          text-decoration: none; color: var(--text); transition: .15s; }
+  .card:hover { border-color: var(--accent); background: #1a1e29; transform: translateY(-2px); }
+  .card .freq { font-size: 11px; color: var(--accent); letter-spacing: .05em; }
+  .card .num { font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1; }
+  .card b { font-size: 16px; }
+  .card p { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
+  .card .go { margin-top: auto; font-size: 13px; color: var(--accent); }
+  .arrow { align-self: center; color: var(--text-dim); font-size: 20px; }
+
+  .tips { margin-top: 22px; background: var(--panel); border: 1px solid var(--border);
+          border-radius: 10px; padding: 14px 18px; }
+  .tips b { font-size: 13px; color: var(--text-dim); }
+  .tips ul { margin: 8px 0 0 18px; }
+  .tips li { font-size: 13px; color: var(--text-dim); line-height: 1.9; }
+  .tips code { color: #9ca8b8; background: #12151c; border: 1px solid var(--border);
+               border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+</style>
+{% endblock %}
+{% block main %}
+<div class="hero">
+  <h2>AutoItemCreator</h2>
+  <p>门店商品数据 → 总部标准 / 三方类目 的批处理工作台。三步走：建范本库 → 备类目表 → 日常跑批。</p>
+</div>
+
+<div class="flow">
+  <a class="card" href="/build">
+    <span class="freq">偶尔（总部商品更新时）</span>
+    <span class="num">①</span>
+    <b>主档商品库构建</b>
+    <p>上传总部商品导出 xlsx，确认字段映射后一键构建向量库——它是所有检索任务的范本库。</p>
+    <span class="go">进入 →</span>
+  </a>
+  <a class="card" href="/category">
+    <span class="freq">商家类目改版时</span>
+    <span class="num">②</span>
+    <b>类目表转换</b>
+    <p>商家后台导出的类目 xlsx 转成单列 csv 白名单（三方 / 通用分目录管理，即转即用）。</p>
+    <span class="go">进入 →</span>
+  </a>
+  <a class="card" href="/run">
+    <span class="freq">日常（每次跑数据）</span>
+    <span class="num">③</span>
+    <b>商品数据构建</b>
+    <p>上传门店商品表，选预设一键满配（或手调全参数），开始执行，跑完下载结果 xlsx。</p>
+    <span class="go">进入 →</span>
+  </a>
+</div>
+
+<div class="tips">
+  <b>小贴士</b>
+  <ul>
+    <li>跑批支持<b>断点续跑</b>（结果缓存）与<b>中途停止</b>——停了重跑即续，不重复烧钱</li>
+    <li>执行中刷新页面没关系，日志会自动重新接入</li>
+    <li>换类目表 / 大改 prompt 时记得换缓存 collection 名，旧缓存会回填旧结果</li>
+    <li>Web 之外，CLI 脚本始终是兜底路径：<code>python core/run_task.py --config 任务.json</code></li>
+  </ul>
+</div>
+{% endblock %}

@@ -1,9 +1,6 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<title>AutoItemCreator</title>
+{% extends "base.html" %}
+{% block title %}AutoItemCreator{% endblock %}
+{% block css %}
 <style>
   :root {
     --bg: #0f1117; --panel: #171a21; --panel-2: #1e222b; --border: #262b35;
@@ -107,18 +104,9 @@
   ::-webkit-scrollbar-thumb { background: #3a4150; border-radius: 2px; }
   * { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
 </style>
-</head>
-<body>
-<nav class="sidebar">
-  <div class="logo"><img src="/static/aic-home-logo.svg?v=2" alt="AutoItemCreator"></div>
-  <a class="nav-item" href="/"><span class="ico">▲</span>主档商品库构建</a>
-  <a class="nav-item" href="/category"><span class="ico">◆</span>类目表转换</a>
-  <a class="nav-item active" href="/run"><span class="ico">▶</span>商品数据构建</a>
-  <div class="ver">AutoItemCreator · v0.2</div>
-</nav>
-
-<div class="mainwrap">
-  <div class="topbar">
+{% endblock %}
+{% block main %}
+<div class="topbar">
     <h1>商品数据构建</h1>
     <span class="hint">通用任务配置 · 预设一键恢复</span>
   </div>
@@ -236,7 +224,8 @@
     </div>
   </div>
 </div>
-
+{% endblock %}
+{% block script %}
 <script>
 const $ = id => document.getElementById(id);
 
@@ -629,5 +618,4 @@ drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover");
   } catch (e) {}
 })();
 </script>
-</body>
-</html>
+{% endblock %}

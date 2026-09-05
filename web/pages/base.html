@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>{% block title %}AutoItemCreator{% endblock %}</title>
+<style>
+  /* ── 深色 token（Qdrant dashboard 深色模式风格，全站唯一定义）── */
+  :root {
+    --bg: #0f1117; --panel: #171a21; --panel-2: #1e222b; --border: #262b35;
+    --text: #e5e7eb; --text-dim: #8b93a1; --accent: #6e73f5; --accent-hover: #7d82ff;
+    --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: var(--bg);
+         color: var(--text); height: 100vh; display: flex; overflow: hidden; }
+
+  /* ── 侧边栏（全站唯一定义，改导航只动这里）── */
+  .sidebar { width: 240px; flex: none; background: var(--panel); border-right: 1px solid var(--border);
+             display: flex; flex-direction: column; padding: 14px 10px; }
+  .logo { padding: 4px 4px 16px; }
+  .logo img { width: 100%; display: block; border-radius: 8px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 8px;
+              font-size: 14px; color: var(--text-dim); cursor: pointer; user-select: none; text-decoration: none; }
+  .nav-item:hover { background: var(--panel-2); color: var(--text); }
+  .nav-item.active { background: #2a2e4a; color: var(--text); }
+  .nav-item .ico { width: 16px; text-align: center; font-size: 13px; }
+  .sidebar .ver { margin-top: auto; padding: 10px 12px; font-size: 12px; color: var(--text-dim); opacity: .7; }
+
+  /* ── 通用骨架 ── */
+  .mainwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 24px 28px; gap: 14px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .hint { font-size: 12px; color: var(--text-dim); }
+  .warn { font-size: 13px; color: var(--amber); }
+  .err  { font-size: 13px; color: var(--red); }
+  .ok   { font-size: 13px; color: var(--green); }
+
+  /* ── 滚动条：Qdrant/MUI 风 ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a4150; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #4a5261; }
+  * { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
+
+  {% block css %}{% endblock %}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo"><img src="/static/aic-home-logo.svg?v=2" alt="AutoItemCreator"></div>
+  <a class="nav-item {{ 'active' if active == 'home' }}" href="/"><span class="ico">⌂</span>首页</a>
+  <a class="nav-item {{ 'active' if active == 'build' }}" href="/build"><span class="ico">▲</span>主档商品库构建</a>
+  <a class="nav-item {{ 'active' if active == 'category' }}" href="/category"><span class="ico">◆</span>类目表转换</a>
+  <a class="nav-item {{ 'active' if active == 'run' }}" href="/run"><span class="ico">▶</span>商品数据构建</a>
+  <div class="ver">AutoItemCreator · v0.2</div>
+</nav>
+
+<div class="mainwrap">
+{% block main %}{% endblock %}
+</div>
+
+{% block script %}{% endblock %}
+</body>
+</html>

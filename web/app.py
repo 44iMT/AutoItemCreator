@@ -21,8 +21,10 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # web/ 自身（routers 包在这）
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+
+from web.common import render
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=ROOT / "web" / "static"), name="static")
@@ -32,6 +34,12 @@ app.mount("/static", StaticFiles(directory=ROOT / "web" / "static"), name="stati
 def favicon():
     # 裁紧版（viewBox 6 6 52 52）：标签页 16px 下六边形占满，原版留白在小尺寸会被吃掉
     return FileResponse(ROOT / "web" / "static" / "aic-favicon.svg", media_type="image/svg+xml")
+
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    """首页：静态指路牌（三步流程卡），无 JS 无 API。"""
+    return render("home.html", "home")
 
 
 from web.routers import build, category, run  # noqa: E402（统一从 web. 走，防双路径导入出两份 job）
