@@ -34,8 +34,10 @@ def favicon():
     return FileResponse(ROOT / "web" / "static" / "aic-favicon.svg", media_type="image/svg+xml")
 
 
-from web.routers import build, category  # noqa: E402（统一从 web. 走，防双路径导入出两份 job）
+from web.routers import build, category, run  # noqa: E402（统一从 web. 走，防双路径导入出两份 job）
 app.include_router(build.pages)      # 页面路由（GET / 等，无前缀）
 app.include_router(build.router)     # 私有 API（/api/build/*）
 app.include_router(category.pages)   # 类目页（GET /category）
 app.include_router(category.router)  # 类目 API（/api/category/*）
+app.include_router(run.pages)        # 执行页（GET /run）
+app.include_router(run.router)       # 执行 API（/api/run/*）

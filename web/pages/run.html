@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>AutoItemCreator</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a21; --panel-2: #1e222b; --border: #262b35;
+    --text: #e5e7eb; --text-dim: #8b93a1; --accent: #6e73f5; --accent-hover: #7d82ff;
+    --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: var(--bg);
+         color: var(--text); height: 100vh; display: flex; overflow: hidden; }
+  .sidebar { width: 240px; flex: none; background: var(--panel); border-right: 1px solid var(--border);
+             display: flex; flex-direction: column; padding: 14px 10px; }
+  .logo { padding: 4px 4px 16px; }
+  .logo img { width: 100%; display: block; border-radius: 8px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-radius: 8px;
+              font-size: 14px; color: var(--text-dim); cursor: pointer; user-select: none; text-decoration: none; }
+  .nav-item:hover { background: var(--panel-2); color: var(--text); }
+  .nav-item.active { background: #2a2e4a; color: var(--text); }
+  .nav-item .ico { width: 16px; text-align: center; font-size: 13px; }
+  .sidebar .ver { margin-top: auto; padding: 10px 12px; font-size: 12px; color: var(--text-dim); opacity: .7; }
+
+  .mainwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 24px 28px; gap: 14px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+
+  .main { display: flex; gap: 12px; flex: 1; min-height: 0; overflow: hidden; }
+  /* 配置面板：占右栏剩余空间、内部滚动（滚动条在参数区，不撑破页面）；日志固定约两成 */
+  .cfgpanel { flex: 1; min-height: 0; overflow-y: auto; }
+  .left { width: 450px; flex: none; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .drop { border: 2px dashed #3a4150; border-radius: 8px; padding: 22px 12px; text-align: center;
+          color: var(--text-dim); cursor: pointer; transition: .15s; font-size: 14px; }
+  .drop.hover { border-color: var(--accent); background: #1c2030; color: var(--text); }
+  .fileinfo { margin-top: 8px; font-size: 13px; color: var(--text-dim); }
+  .cols { flex: 1; overflow-y: auto; min-height: 0; }
+  .cols .colrow { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 6px; cursor: pointer; user-select: none; }
+  .cols .colrow:hover { background: var(--panel-2); }
+  .cols .src { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .cols input[type=checkbox] { accent-color: var(--accent); }
+  .cols .disp { width: 140px; font-size: 12px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px;
+                background: var(--panel-2); color: var(--text); }
+
+  .right { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .cfg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .cfg label { font-size: 12px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+  .cfg input, .cfg select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+        font-size: 14px; background: var(--panel-2); color: var(--text); }
+  .cfg input:focus, .cfg select:focus { outline: none; border-color: var(--accent); }
+  /* 高级区内的输入/下拉与 .cfg 同款配色（否则是原生白色，和页面其他下拉不一致） */
+  .advbody input, .advbody select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+        font-size: 13px; background: var(--panel-2); color: var(--text); }
+  .advbody input:focus, .advbody select:focus { outline: none; border-color: var(--accent); }
+  textarea { width: 100%; min-height: 280px; resize: vertical; padding: 8px 10px;
+        border: 1px solid var(--border); border-radius: 6px; font: 12px/1.6 Consolas, monospace;
+        background: var(--panel-2); color: var(--text); }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--text-dim); }
+  .warn { font-size: 13px; color: var(--amber); }
+  .err  { font-size: 13px; color: var(--red); }
+  .ok   { font-size: 13px; color: var(--green); }
+
+  /* 参数区：平铺多列（滚动交给外层配置面板）；full = 独占一行 */
+  .advbody { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+  .advbody section { min-width: 0; }
+  .advbody section.full { grid-column: 1 / -1; }
+  .advtitle { font-size: 12px; color: var(--text-dim); font-weight: 600; letter-spacing: .05em; }
+  .kvlist { display: flex; flex-direction: column; gap: 6px; }
+  .kvrow { display: flex; gap: 6px; align-items: center; }
+  .kvrow input { flex: 1; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+                 font-size: 13px; background: var(--panel-2); color: var(--text); }
+  .kvrow .k { max-width: 180px; }
+  .kvrow .x { color: var(--red); cursor: pointer; font-size: 14px; padding: 0 4px; user-select: none; }
+  .addbtn { font-size: 12px; color: var(--accent); cursor: pointer; padding: 2px 4px; user-select: none; width: fit-content; }
+  .toolrow { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 13px; }
+  .toolrow label { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text); }
+  .toolrow input { accent-color: var(--accent); }
+  .injrow { display: grid; grid-template-columns: 26px 1fr 150px; gap: 6px; align-items: center; }
+  .injrow input[type=text] { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+        font-size: 13px; background: var(--panel-2); color: var(--text); }
+  .injrow select { padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px;
+        font-size: 13px; background: var(--panel-2); color: var(--text); }
+
+  .actions { display: flex; align-items: center; gap: 12px; }
+  button { padding: 9px 22px; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  #btnStart { background: var(--accent); color: #fff; }
+  #btnStart:hover:not(:disabled) { background: var(--accent-hover); }
+  #btnStart:disabled { background: #3a4150; color: var(--text-dim); cursor: not-allowed; }
+  #btnStop { background: rgba(248,113,113,.12); color: var(--red); border: 1px solid rgba(248,113,113,.4); display: none; }
+  #btnStop:not(:disabled):hover { background: rgba(248,113,113,.25); }
+  .smbtn { padding: 4px 12px; font-size: 12px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+
+  .logpanel { flex: none; height: 22vh; display: flex; flex-direction: column; }  /* 日志固定约两成，配置区占其余 */
+  .log { flex: 1; background: #12151c; border: 1px solid var(--border); color: #9ca8b8;
+         font: 12px/1.6 Consolas, "Courier New", monospace;
+         border-radius: 8px; padding: 10px 14px; overflow-y: auto; white-space: pre-wrap; }
+  .log:empty::before { content: "暂无日志，开始后此处实时显示每行进度"; color: #4a5261; }
+  .log .done { color: var(--green); } .log .fail { color: var(--red); }
+  .log .cache { color: #7aa2c8; }
+  #dl { display: none; font-size: 13px; color: var(--accent); }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a4150; border-radius: 2px; }
+  * { scrollbar-width: thin; scrollbar-color: #3a4150 transparent; }
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo"><img src="/static/aic-home-logo.svg?v=2" alt="AutoItemCreator"></div>
+  <a class="nav-item" href="/"><span class="ico">▲</span>主档商品库构建</a>
+  <a class="nav-item" href="/category"><span class="ico">◆</span>类目表转换</a>
+  <a class="nav-item active" href="/run"><span class="ico">▶</span>商品数据构建</a>
+  <div class="ver">AutoItemCreator · v0.2</div>
+</nav>
+
+<div class="mainwrap">
+  <div class="topbar">
+    <h1>商品数据构建</h1>
+    <span class="hint">通用任务配置 · 预设一键恢复</span>
+  </div>
+
+  <div class="main">
+    <div class="left">
+      <div class="panel">
+        <div class="drop" id="drop">拖入 / 点击选择商品表 xlsx</div>
+        <div class="fileinfo" id="fileinfo"></div>
+      </div>
+      <div class="panel" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+        <b style="font-size:13px; margin-bottom:6px; color:var(--text-dim);">输入列（勾选进 prompt，右侧可改展示名）</b>
+        <div class="cols" id="cols"></div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="panel cfgpanel">
+        <!-- 预设 -->
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+          <b style="font-size:13px; color:var(--text-dim);">预设</b>
+          <select id="presel" style="flex:1; padding:5px 8px; border:1px solid var(--border); border-radius:6px; background:var(--panel-2); color:var(--text); font-size:13px;"></select>
+          <button class="smbtn" id="btnPresetSave">存为预设</button>
+          <button class="smbtn" id="btnPresetDel">删除</button>
+        </div>
+
+        <!-- ① 提示词（视觉主角） -->
+        <div>
+          <b style="font-size:13px; color:var(--text-dim);">System Prompt 模板（{{占位符}} 由注入填充）</b>
+          <textarea id="prompt" spellcheck="false" style="margin-top:4px;"></textarea>
+        </div>
+
+        <!-- ② 类目表 + 运行参数（一行选择） -->
+        <div class="cfg" style="margin-top:10px;">
+          <label>三方类目表
+            <select id="cat_third"></select>
+          </label>
+          <label>通用类目表
+            <select id="cat_general"></select>
+          </label>
+          <label>并发线程
+            <input id="conc" type="number" value="4" min="1" max="16" title="同时处理的行数">
+          </label>
+          <label>行重试次数
+            <input id="retry" type="number" value="3" min="1" max="10" title="单行失败后的重试次数">
+          </label>
+        </div>
+
+        <!-- ③ 输出路径 -->
+        <div class="cfg" style="margin-top:10px; grid-template-columns: 1fr;">
+          <label>输出文件路径
+            <input id="outpath" placeholder="上传后自动填桌面路径，可改（目录自动创建）" title="结果 xlsx 的完整路径">
+          </label>
+        </div>
+
+        <!-- ④ 参数区（平铺：输出列/注入独占行，工具与缓存并列） -->
+        <div class="advbody" style="margin-top:12px;">
+          <section class="full">
+            <div class="advtitle">输出列 —— 键=结果列名，值=给模型的字段说明</div>
+            <div class="kvlist" id="outcols" style="margin-top:6px;"></div>
+            <div class="addbtn" id="addOut">＋ 添加输出列</div>
+          </section>
+          <section class="full">
+            <div class="advtitle">注入 —— 模板占位符自动检测，启用后运行时以工具结果替换</div>
+            <div class="kvlist" id="injections" style="margin-top:6px;"></div>
+            <div class="hint" id="injhint" style="margin-top:4px;">模板里还没有 {{占位符}}</div>
+          </section>
+          <section>
+            <div class="advtitle">Agent 工具（按名挂载）</div>
+            <div class="toolrow" id="tools" style="margin-top:6px;"></div>
+          </section>
+          <section>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="advtitle">结果复用缓存</div>
+              <label class="toolrow" style="font-size:12px; cursor:pointer;">
+                <input type="checkbox" id="reuseon" checked title="关闭=本次全量重跑，不吃缓存也不写入"> 启用
+              </label>
+            </div>
+            <div id="reusebox" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:6px;">
+              <label style="font-size:12px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;">collection
+                <input id="collection" placeholder="如 recategory_cache_902" title="换类目表/大改 prompt 记得换名，旧缓存会回填旧结果">
+              </label>
+              <label style="font-size:12px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;">相似阈值
+                <input id="threshold" type="number" value="0.95" step="0.01" min="0.5" max="1" title="低于此分不复用">
+              </label>
+              <label style="font-size:12px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;">精确键列（断点续跑）
+                <select id="exact" title="等值匹配复用；选（不启用）关闭精确层"></select>
+              </label>
+              <label style="font-size:12px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;">向量键列（跨批复用）
+                <select id="vector" title="相似度过阈值才复用；选（不启用）关闭向量层"></select>
+              </label>
+            </div>
+          </section>
+          <section class="full">
+            <div class="advtitle">运行</div>
+            <div class="toolrow" style="margin-top:6px;">
+              <label><input type="checkbox" id="incinput" checked> 输出包含输入列</label>
+              <label style="color:var(--text-dim);">日志标签 <input id="logtag" value="Task" style="width:90px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; background:var(--panel-2); color:var(--text); font-size:12px;"></label>
+            </div>
+          </section>
+        </div>
+
+        <div id="msg" style="margin-top:8px;"></div>
+        <div class="actions" style="margin-top:8px;">
+          <button id="btnStart" disabled>开始执行</button>
+          <button id="btnStop">停止</button>
+          <a id="dl" href="/api/run/result" download>⬇ 下载结果</a>
+        </div>
+      </div>
+
+      <div class="panel logpanel">
+        <b style="font-size:13px; margin-bottom:6px; color:var(--text-dim);">日志</b>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* ══════════ 唯一真相源：config 对象（将来 QA agent 的 setConfig 就写这里）══════════
+   每个字段带 desc —— UI 提示与 agent schema 同源，一次书写两处受益 */
+let state = { fileId: null, headers: [], tools: [] };
+let config = {
+  output_path: "",        // desc: 结果 xlsx 完整路径；空 = 上传目录自动命名
+  columns_map: {},        // {展示名: 源列名} desc: 进每行 prompt 的字段
+  out_columns: {},        // {列名: 模型说明} desc: 结果列与其 JSON 字段说明
+  system_prompt: "",      // desc: 模板，{{x}} 占位符由注入填充
+  tools: [],              // desc: agent 可调用的工具白名单
+  category: {},           // {third|general: 文件名} desc: 类目表槽位
+  injections: {},         // {"{{x}}": {tool,enabled}} desc: 运行前执行工具并替换占位符
+  concurrency: 4, retry_times: 3, include_input: true, log_tag: "Task",
+  reuse: { collection: "", exact_fields: [], vector_fields: [], vector_threshold: 0.95 },
+};
+const REQUIRED_HINT = ["商品编码", "商品条码", "商品名称"];   // 建议列（缓存与搜索依赖）
+let catFiles = { third: [], general: [] };
+let running = false;
+
+/* ══════════ 输入列（勾选 + 展示名可改）══════════ */
+function renderCols() {
+  const box = $("cols"); box.innerHTML = "";
+  state.headers.forEach(h => {
+    const entry = Object.entries(config.columns_map).find(([, src]) => src === h);
+    const row = document.createElement("div"); row.className = "colrow";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!entry;
+    cb.onchange = () => {
+      if (cb.checked) config.columns_map[h] = h;   // 默认展示名=源列名
+      else delete config.columns_map[entry?.[0] ?? h];
+      renderCols(); refreshAll();
+    };
+    const src = document.createElement("span"); src.className = "src"; src.textContent = h; src.title = h;
+    const disp = document.createElement("input"); disp.className = "disp"; disp.value = entry?.[0] ?? h;
+    disp.disabled = !entry;
+    disp.oninput = () => {  // 改展示名：换键保值
+      const old = entry?.[0] ?? h;
+      const v = disp.value.trim() || old;
+      const val = config.columns_map[old]; delete config.columns_map[old];
+      config.columns_map[v] = val; renderCols(); refreshAll();
+    };
+    row.append(cb, src, disp);
+    if (REQUIRED_HINT.includes(h)) row.title = "建议勾选：缓存键与搜索依赖";
+    box.append(row);
+  });
+}
+
+/* ══════════ 输出列动态列表 ══════════ */
+function renderOut() {
+  const box = $("outcols"); box.innerHTML = "";
+  Object.entries(config.out_columns).forEach(([k, v]) => {
+    const row = document.createElement("div"); row.className = "kvrow";
+    const ik = document.createElement("input"); ik.className = "k"; ik.value = k; ik.placeholder = "列名";
+    const iv = document.createElement("input"); iv.value = v; iv.placeholder = "给模型的字段说明";
+    const x = document.createElement("span"); x.className = "x"; x.textContent = "✕";
+    ik.oninput = () => { const val = config.out_columns[k]; delete config.out_columns[k]; config.out_columns[ik.value || k] = val; renderOut(); refreshAll(); };
+    iv.oninput = () => config.out_columns[k] = iv.value;
+    x.onclick = () => { delete config.out_columns[k]; renderOut(); refreshAll(); };
+    row.append(ik, iv, x); box.append(row);
+  });
+}
+$("addOut").onclick = () => { config.out_columns[""] = ""; renderOut(); };
+
+/* ══════════ 工具多选 ══════════ */
+function renderTools() {
+  const box = $("tools"); box.innerHTML = "";
+  state.tools.forEach(t => {
+    const lab = document.createElement("label"); lab.title = t.desc;
+    const cb = document.createElement("input"); cb.type = "checkbox";
+    cb.checked = config.tools.includes(t.name);
+    cb.onchange = () => {
+      config.tools = [...box.querySelectorAll("input")].filter(c => c.checked)
+        .map(c => c.dataset.name);
+      refreshAll();
+    };
+    cb.dataset.name = t.name;
+    lab.append(cb, document.createTextNode(t.name));
+    box.append(lab);
+  });
+}
+
+/* ══════════ 注入（模板占位符自动检测）══════════ */
+function renderInjections() {
+  const slots = [...new Set(($("prompt").value.match(/\{\{[^}]+\}\}/g) || []))];
+  // 清掉模板里已消失的占位符
+  Object.keys(config.injections).forEach(s => { if (!slots.includes(s)) delete config.injections[s]; });
+  const box = $("injections"); box.innerHTML = "";
+  $("injhint").textContent = slots.length ? "" : "模板里还没有 {{占位符}}";
+  slots.forEach(slot => {
+    const inj = config.injections[slot] ??= { tool: slot.includes("通用") ? "get_categories" : "get_third_categories", enabled: true };
+    const row = document.createElement("div"); row.className = "injrow";
+    const en = document.createElement("input"); en.type = "checkbox"; en.checked = inj.enabled; en.title = "启用注入";
+    en.onchange = () => { inj.enabled = en.checked; refreshAll(); };
+    const nm = document.createElement("input"); nm.type = "text"; nm.value = slot; nm.disabled = true; nm.title = "占位符（引导文字写在模板里）";
+    const sel = document.createElement("select");
+    state.tools.forEach(t => {
+      const o = document.createElement("option"); o.value = t.name; o.textContent = t.name;
+      if (t.name === inj.tool) o.selected = true; sel.append(o);
+    });
+    sel.onchange = () => inj.tool = sel.value;
+    row.append(en, nm, sel); box.append(row);
+  });
+}
+
+/* ══════════ 类目表下拉（third/general 各一）══════════ */
+function renderCats() {
+  [["cat_third", "third"], ["cat_general", "general"]].forEach(([id, key]) => {
+    const sel = $(id); sel.innerHTML = "";
+    const none = document.createElement("option"); none.value = ""; none.textContent = "（不使用）";
+    sel.append(none);
+    catFiles[key].forEach(f => {
+      const o = document.createElement("option");
+      o.value = f.name; o.textContent = `${f.name}（${f.rows}）`;
+      sel.append(o);
+    });
+    sel.value = config.category[key] || "";
+    sel.onchange = () => {
+      if (sel.value) config.category[key] = sel.value;
+      else delete config.category[key];
+      deriveCollection(); refreshAll();
+    };
+  });
+}
+function deriveCollection() {
+  // 类目表名 → collection 推导（902 → recategory_cache_902），仅当用户没改过或为空时填
+  const m = (config.category.third || "").match(/(\d+)\.csv$/);
+  const sug = m ? `recategory_cache_${m[1]}` : (config.category.third ? "recategory_cache" : "");
+  if (!$("collection").dataset.dirty) $("collection").value = sug;
+  config.reuse.collection = $("collection").value.trim();
+}
+
+/* ══════════ 缓存键下拉（单选；源=展示名列表）══════════ */
+function renderKeySelects() {
+  const names = Object.keys(config.columns_map);
+  [["exact", "exact_fields"], ["vector", "vector_fields"]].forEach(([id, key]) => {
+    const sel = $(id); sel.innerHTML = "";
+    const none = document.createElement("option"); none.value = ""; none.textContent = "（不启用）";
+    sel.append(none);
+    names.forEach(n => {
+      const o = document.createElement("option"); o.value = n; o.textContent = n;
+      if (config.reuse[key].includes(n)) o.selected = true;
+      sel.append(o);
+    });
+    if (!config.reuse[key].length) sel.value = "";
+    sel.onchange = () => {
+      config.reuse[key] = sel.value ? [sel.value] : [];
+      refreshAll();
+    };
+  });
+}
+
+/* ══════════ 校验 + 汇总刷新 ══════════ */
+function refreshAll() {
+  config.system_prompt = $("prompt").value;
+  config.concurrency = +$("conc").value || 4;
+  config.retry_times = +$("retry").value || 3;
+  config.include_input = $("incinput").checked;
+  config.log_tag = $("logtag").value || "Task";
+  config.reuse.collection = $("collection").value.trim();
+  config.reuse.vector_threshold = +$("threshold").value || 0.95;
+  config.reuse_on = $("reuseon").checked;
+  $("reusebox").style.opacity = $("reuseon").checked ? 1 : .35;
+  $("reusebox").querySelectorAll("input,select").forEach(el => el.disabled = !$("reuseon").checked);
+  renderInjections(); renderKeySelects();
+
+  const lines = [];
+  const names = Object.keys(config.columns_map);
+  if (!state.fileId) lines.push('<div class="err">✗ 未上传输入表</div>');
+  if (!names.length) lines.push('<div class="err">✗ 列映射为空</div>');
+  if (!Object.keys(config.out_columns).length || !Object.values(config.out_columns).every(v => v.trim()))
+    lines.push('<div class="err">✗ 输出列未配全（名称与说明都要填）</div>');
+  if (!config.system_prompt.trim()) lines.push('<div class="err">✗ 模板为空</div>');
+  if (config.reuse_on && config.reuse.vector_fields.length && !config.reuse.collection)
+    lines.push('<div class="err">✗ 开了缓存但 collection 为空</div>');
+  const ok = state.fileId && names.length && Object.keys(config.out_columns).length
+    && Object.values(config.out_columns).every(v => v.trim()) && config.system_prompt.trim()
+    && (!config.reuse_on || !config.reuse.vector_fields.length || config.reuse.collection);
+  if (ok) lines.push('<div class="ok">✓ 可以执行</div>');
+  $("msg").innerHTML = lines.join("") || '<div class="hint">上传商品表后开始</div>';
+  $("btnStart").disabled = !(ok && !running);
+}
+
+$("collection").oninput = () => { $("collection").dataset.dirty = "1"; deriveCollection(); refreshAll(); };
+$("prompt").addEventListener("input", () => { renderInjections(); refreshAll(); });
+["conc", "retry", "incinput", "logtag", "threshold", "reuseon"].forEach(id => $(id).oninput = refreshAll);
+
+/* ══════════ 预设 ══════════ */
+async function loadPresets() {
+  const j = await (await fetch("/api/run/presets")).json();
+  const sel = $("presel"); sel.innerHTML = '<option value="">— 选择预设 —</option>';
+  j.presets.forEach(p => {
+    const o = document.createElement("option"); o.value = p.name;
+    o.textContent = `${p.name}（${p.mtime}）`; sel.append(o);
+  });
+  sel.onchange = async () => {
+    if (!sel.value) return;
+    if (!confirm("加载预设会覆盖当前表单（输入表除外），继续？")) return;
+    const c = await (await fetch(`/api/run/preset/${encodeURIComponent(sel.value)}`)).json();
+    applyConfig(c);
+  };
+}
+function applyConfig(c) {
+  config = { ...config, ...c, reuse: { ...config.reuse, ...(c.reuse || {}) } };
+  // 控件同步
+  $("conc").value = config.concurrency; $("retry").value = config.retry_times;
+  $("incinput").checked = config.include_input; $("logtag").value = config.log_tag;
+  $("outpath").value = config.output_path || "";
+  $("prompt").value = config.system_prompt || "";
+  $("collection").value = config.reuse.collection || ""; delete $("collection").dataset.dirty;
+  $("threshold").value = config.reuse.vector_threshold ?? 0.95;
+  renderCats(); renderOut(); renderTools(); renderCols(); refreshAll();
+}
+$("btnPresetSave").onclick = async () => {
+  const name = prompt("预设名（中文/字母/数字/_-）：");
+  if (!name) return;
+  const r = await fetch("/api/run/preset", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, config: { ...config, system_prompt: $("prompt").value, output_path: $("outpath").value.trim() } }),
+  });
+  const j = await r.json();
+  if (!r.ok) return alert(j.detail);
+  loadPresets(); $("presel").value = name;
+};
+$("btnPresetDel").onclick = async () => {
+  const name = $("presel").value;
+  if (!name) return;
+  if (!confirm(`删除预设 ${name}？`)) return;
+  await fetch(`/api/run/preset/${encodeURIComponent(name)}`, { method: "DELETE" });
+  loadPresets();
+};
+
+/* ══════════ SSE / 开始 / 停止 ══════════
+   日志滚动窗口 + rAF 批渲染：DOM 只留最近 MAX_LOG 条，一批日志一帧 flush 一次——
+   每条都读 scrollHeight 会强制重排（5 万条 20 秒的教训），布局读写全部移出逐条路径；
+   pinned 由 scroll 事件维护：用户上翻看历史时不自动拉底。 */
+const MAX_LOG = 800;
+let logHidden = 0, logPinned = true, logQueue = [], logRaf = 0;
+
+$("log").addEventListener("scroll", () => {
+  const log = $("log");
+  logPinned = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+});
+
+function _flushLog() {
+  logRaf = 0;
+  const log = $("log");
+  if (!log.children.length || !log.children[0].dataset.fold) {
+    const ph = document.createElement("div");
+    ph.dataset.fold = "1"; ph.style.color = "var(--text-dim)";
+    log.prepend(ph);
+  }
+  const frag = document.createDocumentFragment();
+  for (const { line, cls } of logQueue) {
+    const div = document.createElement("div");
+    if (cls) div.className = cls;
+    div.textContent = line;
+    frag.append(div);
+  }
+  logQueue = [];
+  log.append(frag);
+  while (log.children.length - 1 > MAX_LOG) { log.children[1].remove(); logHidden++; }
+  if (logHidden) log.children[0].textContent = `⋯ 前面 ${logHidden} 条已折叠（服务端留有全量）`;
+  if (logPinned) log.scrollTop = log.scrollHeight;
+}
+
+function flushLogNow() {  // done 回调等同步读 DOM 前先冲刷队列
+  if (logRaf) { cancelAnimationFrame(logRaf); _flushLog(); }
+}
+
+function appendLog(line) {
+  let cls = "";
+  if (/执行完成|来源统计/.test(line)) cls = "done";
+  else if (/失败|错误|Error|Traceback/.test(line)) cls = "fail";
+  else if (/缓存/.test(line)) cls = "cache";
+  logQueue.push({ line, cls });
+  if (!logRaf) logRaf = requestAnimationFrame(_flushLog);
+}
+
+function clearLog() { $("log").innerHTML = ""; logHidden = 0; logQueue = []; logPinned = true; }
+
+function attachStream(after = 0) {
+  const es = new EventSource(`/api/run/stream?after=${after}`);
+  es.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    if (d.done) {
+      es.close(); running = false; $("btnStop").style.display = "none";
+      $("btnStart").style.display = "inline-block"; refreshAll();
+      flushLogNow();
+      const last = $("log").lastElementChild?.textContent || "";
+      if (/执行完成/.test(last)) $("dl").style.display = "";
+      return;
+    }
+    appendLog(d.line);
+  };
+  es.onerror = () => { es.close(); running = false; refreshAll(); };
+}
+
+$("btnStart").onclick = async () => {
+  running = true; refreshAll();
+  $("btnStart").style.display = "none"; $("btnStop").style.display = "inline-block";
+  clearLog(); $("dl").style.display = "none";
+  const r = await fetch("/api/run/start", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      file_id: state.fileId,
+      output_path: $("outpath").value.trim(),
+      columns_map: config.columns_map,
+      out_columns: Object.fromEntries(Object.entries(config.out_columns).filter(([k]) => k.trim())),
+      system_prompt: $("prompt").value,
+      tools: config.tools,
+      category: config.category,
+      injections: config.injections,
+      concurrency: config.concurrency, retry_times: config.retry_times,
+      include_input: config.include_input, log_tag: config.log_tag,
+      reuse: (config.reuse_on && config.reuse.collection) ? {
+        collection: config.reuse.collection,
+        exact_fields: config.reuse.exact_fields,
+        vector_fields: config.reuse.vector_fields,
+        vector_threshold: config.reuse.vector_fields.length ? config.reuse.vector_threshold : null,
+      } : null,
+    }),
+  });
+  const j = await r.json();
+  if (!r.ok) {
+    const detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);  // 422 的 detail 是数组，别拍成 [object Object]
+    clearLog(); appendLog(detail || "启动被拒");
+    running = false; $("btnStop").style.display = "none"; $("btnStart").style.display = "inline-block"; refreshAll();
+    return;
+  }
+  attachStream();
+};
+
+$("btnStop").onclick = async () => {
+  if (!confirm("停止任务？已完成的行在缓存中，重跑即续。")) return;
+  const r = await fetch("/api/run/stop", { method: "POST" });
+  if (!r.ok) { const j = await r.json(); alert(j.detail); }
+};
+
+/* ══════════ 上传 ══════════ */
+async function upload(file) {
+  const fd = new FormData(); fd.append("file", file);
+  $("fileinfo").textContent = "上传中…";
+  const r = await fetch("/api/run/upload", { method: "POST", body: fd });
+  const j = await r.json();
+  if (!r.ok) { $("fileinfo").textContent = j.detail || "上传失败"; return; }
+  state.fileId = j.file_id; state.headers = j.headers;
+  state.tools = j.tools;
+  if (!Object.keys(config.columns_map).length)   // 首次：默认勾建议列（通用提示，非任务指向）
+    config.columns_map = Object.fromEntries(REQUIRED_HINT.filter(c => j.headers.includes(c)).map(c => [c, c]));
+  // 输出路径默认：桌面\原文件名-结果.xlsx（后端注册表识别桌面，防 OneDrive 重定向）
+  if (!$("outpath").value.trim() && j.desktop) {
+    const stem = j.filename.replace(/\.xlsx?$/i, "");
+    $("outpath").value = j.desktop + "\\" + stem + "-结果.xlsx";
+    config.output_path = $("outpath").value;
+  }
+  $("fileinfo").textContent = `${j.filename} · ${j.rows} 行`;
+  renderTools(); renderCols(); renderOut(); refreshAll();
+}
+
+const drop = $("drop");
+drop.onclick = () => { const i = document.createElement("input"); i.type = "file";
+  i.accept = ".xlsx,.xls"; i.onchange = () => i.files[0] && upload(i.files[0]); i.click(); };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("hover"); };
+drop.ondragleave = () => drop.classList.remove("hover");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover");
+  const f = e.dataTransfer.files[0]; if (f) upload(f); };
+
+/* ══════════ 初始化 ══════════ */
+(async () => {
+  const cats = await (await fetch("/api/run/categories")).json();
+  catFiles = cats;
+  renderCats();
+  // 默认选最新三方表
+  if (cats.third.length) { config.category.third = cats.third[0].name; renderCats(); deriveCollection(); }
+  const dr = await fetch("/api/run/defaults");
+  if (dr.ok) applyConfig(await dr.json());
+  loadPresets();
+  refreshAll();
+  // 刷新恢复
+  try {
+    const j = await (await fetch("/api/run/status")).json();
+    if (j.running) {
+      running = true; refreshAll();
+      $("btnStart").style.display = "none"; $("btnStop").style.display = "inline-block";
+      clearLog();
+      attachStream(Math.max(0, (j.lines || 0) - MAX_LOG));   // 只回放最近 MAX_LOG 条，不全量
+      appendLog(`[web] 检测到进行中的任务，已重新接入（仅回放最近 ${MAX_LOG} 条，此前 ${Math.max(0, (j.lines||0)-MAX_LOG)} 条在服务端）`);
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
