@@ -26,7 +26,7 @@ UPLOAD_DIR = ROOT / "web" / "uploads"
 sys.path.insert(0, str(ROOT))  # 复用 builder 的映射表与清洗常量
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # web/（common 在这）
 from core.builder import HQ_FIELDS_MAP
-from web.common import _norm, render
+from web.common import _norm, render, worker_cmd
 
 # 必需：builder 清洗/嵌入的硬依赖；建议：撑下游 recategory 的范本质量
 REQUIRED = ["商品编码", "商品条码", "商品名称"]
@@ -71,13 +71,15 @@ async def upload(file: UploadFile):
     path.write_bytes(await file.read())
 
     import pandas as pd
-    df = pd.read_excel(path, dtype=str, nrows=0)  # 只读表头
+    # pandas 同步 CPU 段全部入线程池——async def 里裸跑会卡死 event loop（心跳/请求全排队）
+    from starlette.concurrency import run_in_threadpool
+    df = await run_in_threadpool(pd.read_excel, path, dtype=str, nrows=0)  # 只读表头
     headers = [str(c) for c in df.columns]
 
     return {
         "file_id": file_id,
         "filename": file.filename,
-        "rows": len(pd.read_excel(path, dtype=str)),
+        "rows": len(await run_in_threadpool(pd.read_excel, path, dtype=str)),
         "headers": match_headers(headers),
         "required": REQUIRED,
         "recommended": RECOMMENDED,
@@ -121,8 +123,7 @@ def build(req: BuildReq):
     fields_file = UPLOAD_DIR / f"{req.file_id}.json"
     fields_file.write_text(json.dumps(req.fields_map, ensure_ascii=False), encoding="utf-8")
 
-    cmd = [sys.executable, "-X", "utf8", "-u", str(ROOT / "core" / "builder.py"),
-           "--excel", str(excel), "--fields-json", str(fields_file)]
+    cmd = worker_cmd("builder.py", ["--excel", str(excel), "--fields-json", str(fields_file)])
 
     job.update(proc=subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

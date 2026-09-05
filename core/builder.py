@@ -93,11 +93,12 @@ def build(excel_path: str, fields_map: dict):
     print(f"[build] 完成，共 {len(df)} 条\n")
 
 # ═══════════════════════════════════════════════════
-# CLI 入口：python core/builder.py [--excel ...] [--fields-json ...] [--rebuild]
+# CLI 入口：python core/builder.py [--excel ...] [--fields-json ...]
 # 默认值即上方 PATH + HQ_FIELDS_MAP，终端裸跑行为不变；
 # 网页/外部调用走 --fields-json 传映射文件（中文映射走 argv 容易踩引号编码坑）
+# main() 独立成函数：桌面版 exe worker 模式（--worker-build）复用它
 # ═══════════════════════════════════════════════════
-if __name__ == "__main__":
+def main():
     import argparse
     import json as _json
 
@@ -113,3 +114,7 @@ if __name__ == "__main__":
         else HQ_FIELDS_MAP
     )
     build(args.excel, fields_map=fields_map)
+
+
+if __name__ == "__main__":
+    main()

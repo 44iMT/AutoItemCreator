@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from web.common import _norm, CATEGORY_DIRS, render
+from web.common import _norm, CATEGORY_DIRS, render, worker_cmd
 
 # 工具注册表（与 core/run_task.py 同源；agent 工具面 = 页面多选框选项）
 sys.path.insert(0, str(ROOT))
@@ -78,10 +78,11 @@ async def upload(file: UploadFile):
     path.write_bytes(await file.read())
 
     import pandas as pd
-    df = pd.read_excel(path, dtype=str, nrows=0)
+    from starlette.concurrency import run_in_threadpool
+    df = await run_in_threadpool(pd.read_excel, path, dtype=str, nrows=0)
     headers = [_norm(str(c)) for c in df.columns]
     return {"file_id": file_id, "filename": file.filename,
-            "rows": len(pd.read_excel(path, dtype=str)),
+            "rows": len(await run_in_threadpool(pd.read_excel, path, dtype=str)),
             "headers": headers,
             "desktop": _desktop(),
             "tools": [{"name": k, "desc": v} for k, v in TOOL_REGISTRY.items()]}
@@ -219,10 +220,10 @@ def start(req: StartReq):
                 raise HTTPException(400, f"类目表不存在: {fname}")
             category[key] = str(p)
 
-    # 注入：enabled 的才进 task.json；工具必须注册；占位符必须在模板里
+    # 注入：显式禁用的才剔除（缺省视为启用——裸 API 调用不带 enabled 时不静默丢注入）
     injections = {}
     for slot, inj in (req.injections or {}).items():
-        if not inj.get("enabled"):
+        if inj.get("enabled", True) is False:
             continue
         if inj.get("tool") not in TOOL_REGISTRY:
             raise HTTPException(400, f"注入 {slot} 的工具未注册: {inj.get('tool')}")
@@ -267,8 +268,7 @@ def start(req: StartReq):
     task_file = RUNS_DIR / f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{req.file_id}.json"
     task_file.write_text(json.dumps(task, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    cmd = [sys.executable, "-X", "utf8", "-u", str(ROOT / "core" / "run_task.py"),
-           "--config", str(task_file)]
+    cmd = worker_cmd("run_task.py", ["--config", str(task_file)])
 
     job.update(proc=subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

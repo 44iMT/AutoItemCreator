@@ -42,6 +42,17 @@ def home():
     return render("home.html", "home")
 
 
+# 桌面壳心跳：页面每 5s ping，desktop.py 侧超时判离线收摊（窗口与服务分进程的黏合剂）
+import time as _time
+last_heartbeat = [_time.time()]
+
+
+@app.get("/api/heartbeat")
+def heartbeat():
+    last_heartbeat[0] = _time.time()
+    return {"ok": True}
+
+
 from web.routers import build, category, run  # noqa: E402（统一从 web. 走，防双路径导入出两份 job）
 app.include_router(build.pages)      # 页面路由（GET / 等，无前缀）
 app.include_router(build.router)     # 私有 API（/api/build/*）

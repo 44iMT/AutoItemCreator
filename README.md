@@ -1,114 +1,57 @@
 # AutoItemCreator
 
-门店新品 Excel → AI 搜索总部商品库 → 匹配/标准化 → 输出结果 Excel。
+门店商品 Excel → AI 检索总部商品库 → 匹配/标准化/归类 → 结果 Excel。
+
+一条龙工作台：**Web 控制台**（日常）+ **CLI 脚本**（兜底）双入口，同一套引擎。
+
+```
+桌面双击 AutoItemCreator.lnk
+  → Web 控制台（Edge app 窗口）
+      ① 主档商品库构建   上传总部商品导出 → 字段映射 → 一键建向量库
+      ② 类目表转换       商家类目 xlsx → csv 白名单（三方/通用分目录）
+      ③ 商品数据构建     上传门店表 → 选预设/全参数配置 → 跑批 → 下载结果
+  → 停止/断点续跑/刷新恢复，全程实时日志
+```
 
 ## 项目结构
 
 ```
-config.example.py   配置模板（复制为 config.py 填入密钥）
-config.py            实际配置（gitignore，不提交）
-requirements.txt     Python 依赖
+config.example.py   配置模板（复制为 config.py 填入密钥；config.py 不入库）
+requirements.txt    Python 依赖
 
-core/                基础设施包
-  agent.py           Agent 底座：构建 agent + Excel 批量任务执行器
-  reuse.py           结果复用缓存：Qdrant 双模式（精确/向量）检索
-  builder.py         总部商品入库：Excel → 向量嵌入 → Qdrant
+desktop.py          桌面壳：起服务 → Edge --app 窗口（图标=favicon，几何居中）→ 心跳守护
+AutoItemCreator.lnk 桌面快捷方式（直连 venv 的 pythonw，零控制台黑框）
 
-tasks/
-  _template.py       调用模板：四个历史任务的完整配置，取消注释即用
-  recategory.py      类目补全：为门店商品匹配三方前台类目
+web/                Web 控制台（FastAPI，页面即领域）
+  app.py            组装层：static / favicon / 首页 / 路由注册 / 启动清场
+  common.py         共享：Jinja2 渲染器 / _norm 表头归一 / 子进程 worker 协议
+  pages/            base.html（侧边栏+深色token 唯一定义）+ 四个页面
+  routers/          build / category / run 三个领域（页面路由 + /api/<域>/* 私有 API）
 
-tools/
-  search.py          向量语义搜索（BGE 嵌入 + 重排）
-  barcode.py         条码精确匹配
-  web_search.py      DeepSeek 联网搜索
-  category.py        类目列表（通用类目 / 三方类目）
+core/               引擎层（web 与 CLI 共用）
+  agent.py          Agent 底座：构建 agent + Excel 批量任务执行器
+  run_task.py       配置驱动执行器：--config task.json（web 执行页的后端）
+  builder.py        总部商品入库：Excel → 清洗 → 向量嵌入 → Qdrant
+  reuse.py          结果复用缓存：Qdrant 双模式（精确/向量）检索
 
-data/
-  通用类目.csv         前台类目数据
-  三方类目.csv         第三方平台前台类目（含一级独占行）
+tasks/              CLI 手动世界（零改动保留）
+  _template.py      调用模板：历史任务配置，取消注释即用
+  recategory.py     类目补全：为门店商品匹配三方前台类目
+
+tools/              Agent 工具
+  search.py         向量语义搜索（BGE 嵌入 + 重排）
+  barcode.py        条码精确匹配
+  web_search.py     DeepSeek 联网搜索
+  category.py       类目表读取（select_category_files 任务级选表）
+
+data/               运行时数据（不入库）
+  category/         通用类目 csv（类目页管理）
+  third_category/   三方类目 csv（902 现役）
+  presets/          任务预设（如 归类-recategory.json，一键满配）
+  runs/             每次执行的 task.json 快照（审计留档）
+  logs/             桌面壳日志（pythonw 态 stdout 落盘处）
+  edge_profile/     Edge app 窗口独立 profile（几何归参数管的代价）
 ```
-
-## 工作方式
-
-任务 = 纯配置 + 一行调用。公共底座（`core/agent.py` 的 `run_excel_task`）
-统一处理读表、并发、重试、失败保行、JSON 提取、写表：
-
-```python
-from core import build_agent, run_excel_task
-from tools import search_products, search_by_barcode, get_third_categories, web_search
-
-agent = build_agent(
-    [search_products, search_by_barcode, get_third_categories, web_search],
-    system_prompt="...",
-)
-
-run_excel_task(
-    agent,
-    input_file=INPUT_FILE,
-    output_file=OUTPUT_FILE,
-    columns_map=COLUMNS_MAP,     # 输入映射：Excel列名 → 提示词显示名
-    out_columns=OUT_COLUMNS,     # 输出定义：字段名 → 描述（拼进 JSON 模板）
-    concurrency=4,
-    retry_times=3,
-    include_input=False,         # False=只输出结果列；True=原始列+结果列
-    display_key="商品名称",      # 进度日志显示字段
-    log_tag="category",
-    reuse=REUSE,                 # 结果复用缓存，None=不启用（见下节）
-)
-```
-
-新任务直接复制 `tasks/recategory.py` 或 `tasks/_template.py` 改配置即可。
-
-### 底座保证
-
-- 失败行不蒸发：重试耗尽后保留原字段、结果列留空，行数守恒
-- LLM 漏回显输入字段时回退原值，不被空串覆盖
-- JSON 提取兜底：花括号截取、中文引号、尾逗号、markdown 包裹
-- 写表用 openpyxl 引擎，全空结果行不会被吞掉
-
-## 结果复用缓存
-
-`reuse` 参数开启：跑过的行不再调 Agent，直接复用历史结果。三层瀑布——
-精确缓存命中 → 向量缓存命中 → Agent（跑完入缓存）。全 Qdrant 单存储，
-一个条目一个 point（payload 存键字段+out，向量存 vector_fields 拼接文本的 BGE 嵌入）。
-
-```python
-REUSE = {
-    "collection": "recategory_cache",  # 缓存 collection 名；大改 prompt/类目表就换名（版本即名字）
-    "exact_fields": ["商品编码"],       # 精确键；不给 = 精确层关闭
-    "vector_fields": ["商品名称"],      # 拼接成单文本嵌向量；不给 = 向量层关闭
-    "vector_threshold": 0.95,          # 开了 vector_fields 必填，无默认值——阈值是业务决策
-    # "rebuild": True,                 # 启动时删库重建，默认 False
-}
-```
-
-两层职责不同：**精确层管断点续跑**（同一批数据重跑时认出"这行跑过"，
-key 只取行内容字段，绝不含行号/文件名），**向量层管跨批次复用**
-（下个月的新批里有这个月处理过的相似商品，嵌入相似度过阈值即复用）。
-
-行为规则：
-
-- 命中结果直接当 LLM 的 `out` 走后续 merge/写表，与 Agent 路径行为完全一致
-- 只有 Agent 真跑的行入缓存，缓存命中的行不回写（相似误判不固化成精确事实）
-- 失败行永不入缓存；逐行成功即写，跑到一半崩了重跑只补尾巴
-- 精确键过轻量清洗（strip + 去 Excel 浮点尾巴 `.0`，同 builder.py）；任一键为空的行跳过精确层
-- 查/存双向 best-effort：缓存故障只降级为走 Agent，不拖死批处理
-- 进度日志标注来源 `[精确缓存]` / `[向量缓存 0.97]`，收尾报各层命中数
-
-向量层注意：同名不同规格的商品相似度可能很高，`vector_fields` 建议控制在
-1-2 个（商品名称+规格顶天）；阈值定多少，跑一批看 `[向量缓存 分数]` 的分布再校。
-
-## 技术栈
-
-| 组件 | 技术 |
-|------|------|
-| LLM | DeepSeek V4 Flash |
-| Agent | LangGraph create_agent |
-| 向量库 | Qdrant（本地 localhost:6333） |
-| 嵌入 | BAAI/bge-large-zh-v1.5（SiliconFlow, 1024维） |
-| 重排 | BAAI/bge-reranker-v2-m3（SiliconFlow） |
-| 解析 | pandas + json5 |
 
 ## 快速开始
 
@@ -116,44 +59,61 @@ key 只取行内容字段，绝不含行号/文件名），**向量层管跨批�
 
 ```bash
 pip install -r requirements.txt
+copy config.example.py config.py   # 填入 DEEPSEEK_KEY / SILICONFLOW_KEY
 ```
 
-Qdrant 本地运行在 `http://localhost:6333`。
+Qdrant 本地运行在 `http://localhost:6333`（[Docker](https://qdrant.tech/documentation/guides/install/) 或二进制均可）。
 
-### 1. 构建向量索引
-
-把总部商品 Excel 导入 Qdrant，数据更新时重跑：
+### 日常：Web 控制台
 
 ```bash
-python core/builder.py
+python desktop.py        # 或双击桌面快捷方式
 ```
 
-### 2. 改配置
+窗口即开（Edge app 模式，随机端口）。三页用法见首页流程卡：
+**建范本库（偶尔）→ 备类目表（商家改版时）→ 日常跑批**。
 
-打开要跑的任务，改顶部变量：
+跑批支持：预设一键满配 / 全参数手调（列映射、输出列、工具、注入、缓存）/
+中途停止 / 断点续跑 / 刷新自动恢复日志流。
 
-```python
-INPUT_FILE  = r"门店新品.xlsx"    # 输入文件
-OUTPUT_FILE = r"结果.xlsx"         # 输出文件
-CONCURRENCY = 4                    # 并发数
-RETRY_TIMES = 3                    # 重试次数
-
-COLUMNS_MAP = {                    # 输入映射：Excel列名 → 提示词显示名
-    "商品条码": "商品条码",
-    "商品名称": "商品名称",
-    # Excel 中没有的列自动跳过，不放进提示词
-}
-OUT_COLUMNS = {                    # 输出定义：字段名 → 描述（详见下节）
-    "前台类目": "根据范本和搜索生成的类目",
-    ...
-}
-```
-
-### 3. 运行
+### 兜底：CLI 脚本
 
 ```bash
-python tasks/recategory.py   # 类目补全
+python core/run_task.py --config <task.json>   # 配置驱动执行器（同 web 后端）
+python tasks/recategory.py                     # 手动脚本（路径写死，直接跑）
+python core/builder.py                         # 建库（web 构建页的同款引擎）
 ```
+
+Web 与 CLI 是同一引擎的两个入口；DeepSeek 抖掉的日子，CLI 永远可用。
+
+## 执行器（core/run_task.py）
+
+吃一份 `task.json` 跑一个任务——它既是配置也是快照（web 每次执行都会在
+`data/runs/` 留档，日后"这批结果什么配置跑的"查文件）：
+
+```jsonc
+{
+  "input_file": "门店表.xlsx",
+  "output_file": "结果.xlsx",
+  "columns_map": {"商品编码": "商品编码", "商品名称": "商品名称"},  // 进每行 prompt 的字段
+  "out_columns": {"前台类目": "字段说明（拼进 JSON 模板）"},        // 输出列契约
+  "system_prompt": "…{{类目表}}…",   // 模板；{{占位符}} 由注入替换
+  "tools": ["search_products", "search_by_barcode", "web_search"],
+  "category": {"third": "data/third_category/三方类目902.csv"},     // 类目表槽位
+  "injections": {"{{类目表}}": {"tool": "get_third_categories"}},   // 启动时执行工具并替换
+  "concurrency": 4, "retry_times": 3, "include_input": true,
+  "reuse": {"collection": "recategory_cache_902", "exact_fields": ["商品编码"],
+             "vector_fields": ["商品名称"], "vector_threshold": 0.95}
+}
+```
+
+关键设计：
+
+- **注入**：静态知识（类目表等）在启动时由只读工具执行并缝进 system prompt，
+  失败即炸不裸跑——残着占位符的 prompt 一行都不该跑
+- **类目槽位**：`select_category_files()` 任务级选表，不调用则走 config 默认；
+  读取日志自带表名（`三方类目 ← 三方类目902.csv: 245 个`），跑批日志自证版本
+- **工具白名单**：按名挂载，未注册即拒；空列表 = 无工具纯 LLM 任务（合法形态）
 
 ## OUT_COLUMNS：输出即提示词
 
@@ -217,6 +177,36 @@ OUT_COLUMNS = {
 同理可以长出：枚举审核（"合规/待审/违规"）、置信度分级（"高/中/低"）、
 多值标签（"用顿号分隔"）……字段描述本身就是 prompt 工程的一部分。
 
+## 结果复用缓存
+
+`reuse` 参数开启：跑过的行不再调 Agent，直接复用历史结果。三层瀑布——
+精确缓存命中 → 向量缓存命中 → Agent（跑完入缓存）。全 Qdrant 单存储。
+
+```python
+REUSE = {
+    "collection": "recategory_cache_902",  # 大改 prompt/类目表就换名（版本即名字）
+    "exact_fields": ["商品编码"],       # 精确键：断点续跑
+    "vector_fields": ["商品名称"],      # 向量键：跨批次相似复用
+    "vector_threshold": 0.95,          # 开了 vector_fields 必填——阈值是业务决策
+    # "rebuild": True,                 # 启动时删库重建，默认 False
+}
+```
+
+两层职责不同：**精确层管断点续跑**（同一批数据重跑时认出"这行跑过"，
+key 只取行内容字段，绝不含行号/文件名），**向量层管跨批次复用**
+（下个月的新批里有这个月处理过的相似商品，嵌入相似度过阈值即复用）。
+
+行为规则：
+
+- 命中结果直接当 LLM 的 `out` 走后续 merge/写表，与 Agent 路径行为完全一致
+- 只有 Agent 真跑的行入缓存，缓存命中的行不回写（相似误判不固化成精确事实）
+- 失败行永不入缓存；逐行成功即写，跑到一半崩了重跑只补尾巴
+- 查/存双向 best-effort：缓存故障只降级为走 Agent，不拖死批处理
+- 进度日志标注来源 `[精确缓存]` / `[向量缓存 0.97]`，收尾报各层命中数
+
+向量层注意：同名不同规格的商品相似度可能很高，`vector_fields` 建议控制在
+1-2 个（商品名称+规格顶天）；阈值定多少，跑一批看 `[向量缓存 分数]` 的分布再校。
+
 ## 工具
 
 | 工具 | 用途 |
@@ -225,7 +215,7 @@ OUT_COLUMNS = {
 | `search_products` | 向量语义搜索 + BGE 重排 |
 | `web_search` | DeepSeek 联网搜索 |
 | `get_categories` | 返回全部通用前台类目 |
-| `get_third_categories` | 返回全部三方前台类目（含一级独占行） |
+| `get_third_categories` | 返回全部三方前台类目 |
 
 ## 架构
 
@@ -243,9 +233,26 @@ pandas 读 Excel → 每行先查复用缓存 ──命中──→ 直接出结
                      └ 类目查询
 ```
 
-## 架构决策
+Web 层架构：页面即领域（每页一个 router：页面路由 + `/api/<域>/*` 私有 API +
+自身任务闸）；长任务（建库/跑批）走 subprocess 隔离，日志经 SSE 实时回流，
+浏览器刷新自动重连续传。
 
-这个架构不是一步到位的，经历了 LLM+RAG → Agent → 上下文压缩 → 行间隔离 的完整演进。踩过的坑和收敛的经验记录在 [`经验总结-Agent批处理架构演进.md`](./经验总结-Agent批处理架构演进.md)。
+### 架构决策
+
+这个架构经历了 LLM+RAG → Agent → 上下文压缩 → 行间隔离 → Web 化的完整演进。
+踩过的坑和收敛的经验记录在 [`经验总结-Agent批处理架构演进.md`](./经验总结-Agent批处理架构演进.md)。
+
+## 技术栈
+
+| 组件 | 技术 |
+|------|------|
+| LLM | DeepSeek V4 Flash |
+| Agent | LangGraph create_agent |
+| Web | FastAPI + Jinja2 + SSE（Edge --app 桌面壳） |
+| 向量库 | Qdrant（本地 localhost:6333） |
+| 嵌入 | BAAI/bge-large-zh-v1.5（SiliconFlow, 1024维） |
+| 重排 | BAAI/bge-reranker-v2-m3（SiliconFlow） |
+| 解析 | pandas + json5 |
 
 ## 相关文章
 

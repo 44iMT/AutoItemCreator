@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 config.py
 data/
+# PyInstaller 打包产物（已退回 dev 形态，防误提交）
+build/
+dist/
+*.spec
+edge_profile/data
+*.lnk

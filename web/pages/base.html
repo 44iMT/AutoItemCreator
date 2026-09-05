@@ -61,6 +61,15 @@
 {% block main %}{% endblock %}
 </div>
 
+<script>
+/* 桌面壳心跳：窗口活着就 ping，服务靠它判断"关窗→收摊"（普通浏览器访问也无害）。
+   打开/切回可见立即 ping——setInterval 首个 ping 要等 5s，切页会重置计时，
+   连续导航的空窗叠加会逼近超时红线（15s），先 ping 一手把空窗关掉 */
+const _ping = () => fetch('/api/heartbeat').catch(() => {});
+_ping();
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && _ping());
+setInterval(_ping, 5000);
+</script>
 {% block script %}{% endblock %}
 </body>
 </html>
