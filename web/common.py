@@ -15,20 +15,12 @@ def render(page: str, active: str, **kw) -> str:
     return _env.get_template(page).render(active=active, **kw)
 
 
-# ── 子进程 worker 命令 ──
-# dev：python 直跑脚本；frozen（PyInstaller）：exe 自调用 worker 模式
-# （打包后磁盘上没有 .py，exe 也不是解释器——唯一姿势是 exe 重入自己）
-# flag 协议单点定义：--worker-{tag}，desktop.py 的 _maybe_worker 按 tag 分发
+# ── 子进程命令：python 直跑 core/ 下脚本（-u 关缓冲，print 实时进管道）──
 import sys as _sys
-
-FROZEN = bool(getattr(_sys, "frozen", False))
-_WORKER_TAGS = {"builder.py": "build", "run_task.py": "task"}
 
 
 def worker_cmd(script: str, args: list) -> list:
     """script: 'builder.py' / 'run_task.py'；args 为脚本参数。"""
-    if FROZEN:
-        return [_sys.executable, f"--worker-{_WORKER_TAGS[script]}", *args]
     return [_sys.executable, "-X", "utf8", "-u", str(ROOT / "core" / script), *args]
 
 # 类目文件目录：type → (目录, config 里的生效路径属性名)

@@ -41,22 +41,6 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _maybe_worker() -> bool:
-    """子进程重入口（--worker-build/--worker-task），与 web.common._WORKER_TAGS 同协议。"""
-    a = sys.argv[1:]
-    if a and a[0] == "--worker-build":
-        sys.argv = ["builder.py", *a[1:]]
-        from core import builder
-        builder.main()
-        return True
-    if a and a[0] == "--worker-task":
-        sys.argv = ["run_task.py", *a[1:]]
-        from core import run_task
-        run_task.main()
-        return True
-    return False
-
-
 def _open_app_window(url: str) -> None:
     """Edge --app 独立窗口（无地址栏，图标=favicon）；居中 1600x900；Edge 缺席退默认浏览器。"""
     W, H = 1600, 900
@@ -87,8 +71,6 @@ def _open_app_window(url: str) -> None:
 
 
 def main():
-    if _maybe_worker():
-        return
     import uvicorn
     import web.app  # noqa: F401
 
